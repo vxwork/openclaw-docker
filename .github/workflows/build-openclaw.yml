@@ -13,7 +13,7 @@ jobs:
   build-openclaw:
     uses: ./.github/workflows/base-workflow.yml 
     with:
-      app-name: 'online-base'
+      app-name: 'openclaw'
       docker-file: './docker/Dockerfile'  
     permissions:
       contents: read
