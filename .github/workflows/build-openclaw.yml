@@ -1,0 +1,21 @@
+name: Build OpenClaw Docker Image
+
+on:
+  workflow_dispatch:    
+
+      
+env:
+  # GitHub Container Registry
+  GHCR_REGISTRY: ghcr.io
+  GHCR_IMAGE_NAME: ${{ github.repository }}/linux_latest  
+
+jobs:
+  build-openclaw:
+    uses: ./.github/workflows/base-workflow.yml 
+    with:
+      app-name: 'online-base'
+      docker-file: './Dockerfile'  
+    permissions:
+      contents: read
+      packages: write
+
