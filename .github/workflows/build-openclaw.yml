@@ -14,7 +14,7 @@ jobs:
     uses: ./.github/workflows/base-workflow.yml 
     with:
       app-name: 'online-base'
-      docker-file: './Dockerfile'  
+      docker-file: './docker/Dockerfile'  
     permissions:
       contents: read
       packages: write
