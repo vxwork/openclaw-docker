@@ -19,18 +19,18 @@ OpenClaw 的 Docker 镜像构建仓库，通过 GitHub Actions 构建并推送�
 ## 镜像信息
 
 - **注册表**：`ghcr.io`
-- **镜像名称**：`<你的 GitHub 用户名或组织>/openclaw-docker/online-base`
+- **镜像名称**：`vxwork/openclaw-docker/online-base`
 - **标签**：`linux_latest`
 
-拉取示例（将 `OWNER` 替换为实际用户名或组织名）：
+拉取示例：
 
 ```bash
-docker pull ghcr.io/OWNER/openclaw-docker/online-base:linux_latest
+docker pull ghcr.io/vxwork/openclaw-docker/online-base:linux_latest
 ```
 
 ## 工作流说明
 
-- **`build-openclaw.yml`**：入口工作流，手动触发后调用通用构建流程，使用根目录下的 `Dockerfile`
+- **`build-openclaw.yml`**：入口工作流，手动触发后调用通用构建流程，使用根目录下的 `docker/Dockerfile`
 - **`base-workflow.yml`**：可复用的 Docker 构建流程，负责 checkout、登录 GHCR、元数据、构建并推送镜像
 
 ## 前置条件
