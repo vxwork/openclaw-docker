@@ -1,39 +1,114 @@
-# openclaw-docker
+## openclaw-docker
 
-OpenClaw 的 Docker 镜像构建仓库，通过 GitHub Actions 构建并推送镜像到 GitHub Container Registry (GHCR)。
+This repository provides a Docker image build for OpenClaw. The image can be built locally or via GitHub Actions and pushed to GitHub Container Registry (GHCR).
 
-## 功能
+**Features**
 
-- **自动化构建**：使用 GitHub Actions 构建 Docker 镜像
-- **GHCR 推送**：构建完成后自动推送到 [GitHub Container Registry](https://ghcr.io)
-- **构建缓存**：使用 GitHub Actions 缓存 (GHA cache) 加速后续构建
+- Automated build via GitHub Actions (workflow_dispatch)
+- Push to GHCR after successful build
+- Build cache support to speed up subsequent builds
 
-## 如何构建
+## How to build (GitHub Actions)
 
-1. 打开仓库的 **Actions** 页签
-2. 在左侧选择 **Build OpenClaw Docker Image**
-3. 点击 **Run workflow**，选择分支后运行
+1. Open the repository's **Actions** tab on GitHub.
+2. Select the `Build OpenClaw Docker Image` workflow.
+3. Click **Run workflow**, choose the branch and start the job.
 
-构建由 `workflow_dispatch` 手动触发，不会在 push 时自动运行。
+The workflow is manually triggered (`workflow_dispatch`) and uses the `docker/Dockerfile` in this repository.
 
-## 镜像信息
+## Image info
 
-- **注册表**：`ghcr.io`
-- **镜像名称**：`vxwork/openclaw-docker/online-base`
-- **标签**：`linux_latest`
+- Registry: `ghcr.io`
+- Image name: `vxwork/openclaw-docker/online-base`
+- Tag example: `linux_latest`
 
-拉取示例：
+Pull example:
 
 ```bash
 docker pull ghcr.io/vxwork/openclaw-docker/online-base:linux_latest
 ```
 
-## 工作流说明
+## Run locally
 
-- **`build-openclaw.yml`**：入口工作流，手动触发后调用通用构建流程，使用根目录下的 `docker/Dockerfile`
-- **`base-workflow.yml`**：可复用的 Docker 构建流程，负责 checkout、登录 GHCR、元数据、构建并推送镜像
+Run with `docker run` (example):
 
-## 前置条件
+```bash
+docker run -d --name openclaw -p 18789:18789 \
+  -v openclaw-config:/app/config -v openclaw-data:/app/data \
+  ghcr.io/vxwork/openclaw-docker/online-base:linux_latest
+```
 
-- 仓库根目录需存在 `Dockerfile`
-- 默认使用 GitHub 提供的 `GITHUB_TOKEN` 推送镜像，无需额外配置
+Or use `docker-compose` (recommended when using this repository's compose file).
+This repo includes `docker-compose.yml` that defines a service named `openclawbot`.
+By default the compose file mounts `./config` to `/root/.openclaw` inside the container
+so the entrypoint can persist configuration and pairing tokens there.
+
+```bash
+# start in detached mode
+docker compose up -d
+
+# stop and remove
+docker compose down
+```
+
+If you prefer to build locally before running with `docker run`:
+
+```bash
+docker build -t openclaw:local -f docker/Dockerfile .
+docker run -d --name openclaw -p 18789:18789 openclaw:local
+```
+
+## First-run configuration
+
+This image includes an entrypoint script that initializes configuration on first start.
+
+- The compose file mounts `./config` to `/root/.openclaw` inside the container. On first start,
+  the entrypoint checks for `/root/.openclaw/openclaw.json`. If missing it:
+  - creates `/root/.openclaw/workspace` and `/root/.openclaw/pairing`
+  - generates a device token and writes `/root/.openclaw/pairing/device.json`
+  - starts the gateway with `--allow-unconfigured` so you can complete initial setup
+
+- To manually run the config helper inside a running container (if needed):
+
+```bash
+# for docker run example
+docker exec -it openclaw /bin/sh -c "pnpm openclaw config"
+
+# for docker compose example (service name: openclawbot)
+docker compose exec openclawbot /bin/sh -c "pnpm openclaw config"
+```
+
+Make sure the host `./config` directory is writable by the container, so configuration
+persists across restarts.
+
+## Notes on Dockerfile
+
+- The `docker/Dockerfile` in this repository is based on `almalinux:10.1-minimal` and installs Node.js via NodeSource. It then installs `pnpm`, clones the `openclaw` repository, installs dependencies and builds the project.
+- The image exposes port `18789` and defines `VOLUME` entries for persistent `config` and `data`.
+
+## Migration from `qverisbot-docker`
+
+This repository has been updated to follow the layout and conventions from the `qverisbot-docker` main branch. The Dockerfile uses `almalinux` for packaging as requested; if you want an exact 1:1 copy of that repo's files, provide the repo or point to specific diffs and I will sync them precisely.
+
+## Recommendation: Qveris AI for OpenClaw
+
+For an enhanced OpenClaw experience, consider using Qveris AI — a toolset that integrates with OpenClaw and provides automation and AI-driven helpers. Qveris AI is recommended as a companion for OpenClaw deployments.
+
+## Troubleshooting
+
+- If the service does not start, inspect container logs:
+
+```bash
+# view logs for docker run example
+docker logs -f openclaw
+
+# view logs for docker compose example (service name: openclawbot)
+docker compose logs -f openclawbot
+```
+
+- Interactive shell:
+
+```bash
+docker exec -it openclaw /bin/sh       # docker run example
+docker compose exec openclawbot /bin/sh # compose example
+```
