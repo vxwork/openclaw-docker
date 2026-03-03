@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+# 确保 matplotlib 配置存在（构建时可能创建，但运行时检查更保险）
+if [ ! -f /root/.config/matplotlib/matplotlibrc ]; then
+    mkdir -p /root/.config/matplotlib
+    cat <<'EOF' >/root/.config/matplotlib/matplotlibrc
+font.family: sans-serif
+font.sans-serif: Noto Sans CJK SC, DejaVu Sans
+axes.unicode_minus: False
+EOF
+    echo "✅ 已生成 /root/.config/matplotlib/matplotlibrc"
+fi
+
 # Check for necessary configuration
 if [ ! -f /root/.openclaw/openclaw.json ]; then
     echo "⚠️ 配置文件不存在，首次启动需要初始化配置..."
