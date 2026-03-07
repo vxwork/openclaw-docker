@@ -42,7 +42,7 @@ RUN git clone https://github.com/openclaw/openclaw.git .
 # 安装依赖
 RUN pnpm install && pnpm ui:build && pnpm build && pnpm openclaw setup
 # 安装 Python 依赖
-RUN pip install matplotlib numpy reportlab
+RUN pip install matplotlib numpy reportlab fpdf2 weasyprint
 
 # 预配置 matplotlib 使用中文（镜像构建时生成，容器运行时由 entrypoint 进一步确认）
 # 将常见中文字体放在 sans-serif 列表的前面，matplotlib 会按顺序
