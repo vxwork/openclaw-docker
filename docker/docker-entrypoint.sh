@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# 兜底终端类型，避免 TUI 在最小镜像中因 TERM 缺失退出
+export TERM="${TERM:-xterm-256color}"
+
 # 确保 matplotlib 配置存在
 if [ ! -f /root/.config/matplotlib/matplotlibrc ]; then
     mkdir -p /root/.config/matplotlib

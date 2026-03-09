@@ -26,6 +26,8 @@ FROM almalinux:10.1-minimal
 RUN if ! command -v dnf >/dev/null 2>&1; then microdnf install -y dnf; fi \
     && dnf install -y --setopt=install_weak_deps=False --nodocs \
         net-tools \
+        which \
+        ncurses \
         curl \
         openssl \
         jq \
@@ -60,6 +62,7 @@ RUN mkdir -p /root/.config/matplotlib && \
 EXPOSE 18789
 ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
+ENV TERM=xterm-256color
 
 COPY docker/docker-entrypoint.sh docker/install_feishu_plugin.sh /usr/local/bin/
 RUN printf '#!/bin/sh\nexec node /app/openclaw.mjs "$@"\n' > /usr/local/bin/openclaw \
