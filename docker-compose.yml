@@ -14,6 +14,9 @@ services:
     environment:
       - OPENCLAW_GATEWAY_TOKEN=582f027860c56071d5397404ff621f92c7522a0ebf645d079ffafabfed7298e2
       - TERM=xterm-256color
+      - COLORTERM=truecolor
+      - FORCE_COLOR=1
+      - OPENCLAW_THEME=dark
     stdin_open: true
     tty: true
     restart: unless-stopped
