@@ -65,7 +65,7 @@ ENV LC_ALL=zh_CN.UTF-8
 ENV TERM=xterm-256color
 
 COPY docker/docker-entrypoint.sh docker/install_feishu_plugin.sh /usr/local/bin/
-RUN printf '#!/bin/sh\nif [ "${1:-}" = "tui" ]; then\n  unset CI\n  export NODE_ENV=development\n  export TERM="${TERM:-xterm-256color}"\nfi\nexec node /app/openclaw.mjs "$@"\n' > /usr/local/bin/openclaw \
+RUN printf '#!/bin/sh\nis_tui=0\nfor arg in "$@"; do\n  if [ "$arg" = "tui" ]; then\n    is_tui=1\n    break\n  fi\ndone\nif [ "$is_tui" = "1" ]; then\n  unset CI\n  export NODE_ENV=development\n  export TERM="${TERM:-xterm-256color}"\nfi\nexec node /app/openclaw.mjs "$@"\n' > /usr/local/bin/openclaw \
     && chmod +x /usr/local/bin/openclaw /usr/local/bin/docker-entrypoint.sh /usr/local/bin/install_feishu_plugin.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

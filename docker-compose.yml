@@ -1,6 +1,9 @@
 services:
   openclawbot:
-    image: ghcr.io/vxwork/openclaw-docker/openclaw:linux_latest  
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: openclaw:local
     container_name: openclawbot
     #ports:
     #  - "18789:18789"
@@ -9,8 +12,8 @@ services:
     volumes:
       - ./config:/root/.openclaw
     environment:
-      - NODE_ENV=production
       - OPENCLAW_GATEWAY_TOKEN=582f027860c56071d5397404ff621f92c7522a0ebf645d079ffafabfed7298e2
+      - TERM=xterm-256color
     stdin_open: true
     tty: true
     restart: unless-stopped
