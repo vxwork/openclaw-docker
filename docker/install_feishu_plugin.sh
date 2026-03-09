@@ -21,6 +21,30 @@ PACKAGE_NAME="@larksuiteoapi/feishu-openclaw-plugin"
 EXTENSIONS_DIR="$HOME/.openclaw/extensions"
 PLUGIN_PATH="$EXTENSIONS_DIR/$PLUGIN_NAME"
 CONFLICT_PLUGIN_PATH="$EXTENSIONS_DIR/feishu"
+CONFIG_FILE="$HOME/.openclaw/openclaw.json"
+
+ensure_config_and_plugin_policy() {
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "{}" > "$CONFIG_FILE"
+    fi
+
+    node -e "
+    const fs = require('fs');
+    const p = '$CONFIG_FILE';
+    const config = JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (!config.plugins) config.plugins = {};
+    if (!config.plugins.entries) config.plugins.entries = {};
+    if (!config.plugins.entries.feishu) config.plugins.entries.feishu = {};
+    config.plugins.entries.feishu.enabled = false;
+    if (!config.plugins.allow) config.plugins.allow = [];
+    if (!config.plugins.allow.includes('$PLUGIN_NAME')) {
+        config.plugins.allow.push('$PLUGIN_NAME');
+    }
+    fs.writeFileSync(p, JSON.stringify(config, null, 2));
+    console.log('配置已更新');
+    "
+}
 
 # 清理并创建工作目录
 rm -rf "$WORK_DIR"
@@ -40,25 +64,7 @@ echo -e "${BLUE}[3/6] 设置 npm 镜像...${NC}"
 npm config set registry https://registry.npmjs.org/
 
 echo -e "${BLUE}[4/6] 禁用内置飞书插件...${NC}"
-# 读取当前配置并修改
-CONFIG_FILE="$HOME/.openclaw/openclaw.json"
-if [ -f "$CONFIG_FILE" ]; then
-    # 使用 node 修改 JSON 配置
-    node -e "
-    const fs = require('fs');
-    const config = JSON.parse(fs.readFileSync('$CONFIG_FILE', 'utf8'));
-    if (!config.plugins) config.plugins = {};
-    if (!config.plugins.entries) config.plugins.entries = {};
-    if (!config.plugins.entries.feishu) config.plugins.entries.feishu = {};
-    config.plugins.entries.feishu.enabled = false;
-    if (!config.plugins.allow) config.plugins.allow = [];
-    if (!config.plugins.allow.includes('$PLUGIN_NAME')) {
-        config.plugins.allow.push('$PLUGIN_NAME');
-    }
-    fs.writeFileSync('$CONFIG_FILE', JSON.stringify(config, null, 2));
-    console.log('配置已更新');
-    "
-fi
+ensure_config_and_plugin_policy
 
 echo -e "${BLUE}[5/6] 移除冲突目录...${NC}"
 if [ -d "$CONFLICT_PLUGIN_PATH" ]; then
@@ -91,7 +97,14 @@ run_openclaw() {
     exit 1
 }
 
-run_openclaw plugins install "$PACKAGE_NAME"
+if [ -d "$PLUGIN_PATH" ]; then
+    echo "检测到插件已存在：$PLUGIN_PATH，跳过重复安装"
+else
+    run_openclaw plugins install "$PACKAGE_NAME"
+fi
+
+# 二次确保策略落盘（覆盖安装流程中可能的写入）
+ensure_config_and_plugin_policy
 
 echo ""
 echo -e "${GREEN}=== 安装完成 ===${NC}"

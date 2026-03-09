@@ -62,8 +62,8 @@ fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "⚠️ openclaw.json 不存在，首次启动允许未配置状态"
-    echo "安装官方飞书插件"
-    /usr/local/bin/install_feishu_plugin.sh
+    #echo "安装官方飞书插件"
+    #/usr/local/bin/install_feishu_plugin.sh
     GATEWAY_ARGS="--allow-unconfigured --port 18789 --verbose --token ${GATEWAY_TOKEN}"
 else
     echo "✅ openclaw.json 已存在，直接启动"
