@@ -15,7 +15,7 @@ RUN git config --global --add url."https://github.com/".insteadOf git@github.com
 RUN git clone https://github.com/openclaw/openclaw.git . \
     && pnpm install \
     && pnpm ui:build \
-    && pnpm build:docker \
+    && OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build:docker \
     && pnpm openclaw setup \
     && pnpm prune --prod \
     && rm -rf .git /root/.npm /root/.cache /root/.local/share/pnpm/store
