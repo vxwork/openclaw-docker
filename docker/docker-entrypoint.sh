@@ -62,7 +62,8 @@ fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "⚠️ openclaw.json 不存在，首次启动允许未配置状态"
-    
+    echo "安装官方飞书插件"
+    /usr/local/bin/install_feishu_plugin.sh
     GATEWAY_ARGS="--allow-unconfigured --port 18789 --verbose --token ${GATEWAY_TOKEN}"
 else
     echo "✅ openclaw.json 已存在，直接启动"
@@ -72,12 +73,10 @@ fi
 # ==================== 执行启动（优先全局命令，兼容 pnpm 方式） ====================
 
 if command -v openclaw >/dev/null 2>&1; then
-    echo "ℹ️ 使用全局 openclaw 命令启动"
-    /usr/local/bin/install_feishu_plugin.sh
+    echo "ℹ️ 使用全局 openclaw 命令启动"    
     exec openclaw gateway $GATEWAY_ARGS
 elif [ -f /app/package.json ] && command -v pnpm >/dev/null 2>&1; then
     echo "ℹ️ 使用 pnpm openclaw 启动（源码模式）"
-    /usr/local/bin/install_feishu_plugin.sh
     exec pnpm openclaw gateway $GATEWAY_ARGS
 else
     echo "❌ 错误：找不到 openclaw 命令（全局或 pnpm）"
