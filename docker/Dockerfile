@@ -62,7 +62,8 @@ ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
 
 COPY docker/docker-entrypoint.sh docker/install_feishu_plugin.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/install_feishu_plugin.sh
+RUN printf '#!/bin/sh\nexec node /app/openclaw.mjs "$@"\n' > /usr/local/bin/openclaw \
+    && chmod +x /usr/local/bin/openclaw /usr/local/bin/docker-entrypoint.sh /usr/local/bin/install_feishu_plugin.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
