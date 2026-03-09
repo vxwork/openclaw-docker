@@ -1,7 +1,7 @@
 FROM almalinux:10.1-minimal AS builder
 
 RUN if ! command -v dnf >/dev/null 2>&1; then microdnf install -y dnf; fi
-RUN dnf install -y --setopt=install_weak_deps=False --nodocs git curl nodejs npm \
+RUN dnf install -y --setopt=install_weak_deps=False --nodocs git curl bash nodejs npm \
     && dnf clean all
 RUN npm install -g pnpm && npm cache clean --force
 
@@ -12,7 +12,7 @@ RUN git config --global --add url."https://github.com/".insteadOf git@github.com
     && git config --global --add url."https://github.com/".insteadOf git@github.com:/ \
     && git config --global --add safe.directory "*"
 
-RUN git clone --depth 1 https://github.com/openclaw/openclaw.git . \
+RUN git clone https://github.com/openclaw/openclaw.git . \
     && pnpm install \
     && pnpm ui:build \
     && pnpm build \
