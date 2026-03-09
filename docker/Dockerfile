@@ -38,8 +38,6 @@ RUN git config --global --add url."https://github.com/".insteadOf git@github.com
 
 WORKDIR /app
 
-RUN git clone https://github.com/openclaw/openclaw.git .
-
 RUN export SHELL=/bin/bash && pnpm setup
 
 RUN export PNPM_HOME="/root/.local/share/pnpm" \
