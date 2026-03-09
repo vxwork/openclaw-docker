@@ -40,9 +40,9 @@ WORKDIR /app
 
 RUN git clone https://github.com/openclaw/openclaw.git .
 
-# 先初始化 pnpm 全局环境（创建 ~/.local/share/pnpm 等目录，并设置 PATH）
-RUN pnpm setup \
-    && export PNPM_HOME="/root/.local/share/pnpm" \
+RUN export SHELL=/bin/bash && pnpm setup
+
+RUN export PNPM_HOME="/root/.local/share/pnpm" \
     && export PATH="$PNPM_HOME:$PATH" \
     && git clone https://github.com/openclaw/openclaw.git . \
     && pnpm install \
