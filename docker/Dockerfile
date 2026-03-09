@@ -13,11 +13,11 @@ RUN git config --global --add url."https://github.com/".insteadOf git@github.com
     && git config --global --add safe.directory "*"
 
 RUN git clone https://github.com/openclaw/openclaw.git . \
-    && pnpm install \
-    && pnpm ui:build \
-    && OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build:docker \
-    && pnpm openclaw setup \
-    && pnpm prune --prod \
+    && CI=true pnpm install \
+    && CI=true pnpm ui:build \
+    && CI=true OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build:docker \
+    && CI=true pnpm openclaw setup \
+    && CI=true pnpm prune --prod \
     && rm -rf .git /root/.npm /root/.cache /root/.local/share/pnpm/store
 
 FROM almalinux:10.1-minimal
