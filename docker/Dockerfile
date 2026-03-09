@@ -48,6 +48,13 @@ RUN export PNPM_HOME="/root/.local/share/pnpm" \
     && pnpm build \
     && pnpm openclaw setup \
     && pnpm link --global
+
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="${PNPM_HOME}:${PATH}"
+
+# 验证一下（构建时打印，方便 debug）
+RUN which openclaw || echo "openclaw not found after link" \
+    && ls -la $PNPM_HOME || true
     
 # 安装 Python 依赖
 RUN pip install matplotlib numpy reportlab fpdf2 weasyprint
