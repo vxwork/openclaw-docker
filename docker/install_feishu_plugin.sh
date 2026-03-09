@@ -28,7 +28,7 @@ mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
 echo -e "${BLUE}[1/6] 下载安装器...${NC}"
-curl -sL -o skill.tgz "https://sf3-cn.feishucdn.com/obj/open-platform-opendoc/195a94cb3d9a45d862d417313ff62c9c_gfW8JbxtTd.tgz"
+curl -sL -o skill.tgz "https://sf3-cn.feishucdn.com/obj/open-platform-opendoc/879b06f872058309ef70f49bcd38a71f_Pr8pNIJ9J9.tgz"
 tar -xzf skill.tgz
 cd package
 
