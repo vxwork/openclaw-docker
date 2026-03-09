@@ -39,8 +39,18 @@ RUN git config --global --add url."https://github.com/".insteadOf git@github.com
 WORKDIR /app
 
 RUN git clone https://github.com/openclaw/openclaw.git .
-# 安装依赖
-RUN pnpm install && pnpm ui:build && pnpm build && pnpm openclaw setup &&  pnpm link --global
+
+# 先初始化 pnpm 全局环境（创建 ~/.local/share/pnpm 等目录，并设置 PATH）
+RUN pnpm setup \
+    && export PNPM_HOME="/root/.local/share/pnpm" \
+    && export PATH="$PNPM_HOME:$PATH" \
+    && git clone https://github.com/openclaw/openclaw.git . \
+    && pnpm install \
+    && pnpm ui:build \
+    && pnpm build \
+    && pnpm openclaw setup \
+    && pnpm link --global
+    
 # 安装 Python 依赖
 RUN pip install matplotlib numpy reportlab fpdf2 weasyprint
 
