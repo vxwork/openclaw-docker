@@ -40,7 +40,7 @@ WORKDIR /app
 
 RUN git clone https://github.com/openclaw/openclaw.git .
 # 安装依赖
-RUN pnpm install && pnpm ui:build && pnpm build && pnpm openclaw setup
+RUN pnpm install && pnpm ui:build && pnpm build && pnpm openclaw setup &&  pnpm link --global
 # 安装 Python 依赖
 RUN pip install matplotlib numpy reportlab fpdf2 weasyprint
 
