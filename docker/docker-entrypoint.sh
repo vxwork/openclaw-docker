@@ -73,9 +73,11 @@ fi
 
 if command -v openclaw >/dev/null 2>&1; then
     echo "ℹ️ 使用全局 openclaw 命令启动"
+    /usr/local/bin/install_feishu_plugin.sh
     exec openclaw gateway $GATEWAY_ARGS
 elif [ -f /app/package.json ] && command -v pnpm >/dev/null 2>&1; then
     echo "ℹ️ 使用 pnpm openclaw 启动（源码模式）"
+    /usr/local/bin/install_feishu_plugin.sh
     exec pnpm openclaw gateway $GATEWAY_ARGS
 else
     echo "❌ 错误：找不到 openclaw 命令（全局或 pnpm）"

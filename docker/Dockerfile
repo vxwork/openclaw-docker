@@ -1,9 +1,10 @@
 FROM almalinux:10.1-minimal AS builder
 
-RUN if ! command -v dnf >/dev/null 2>&1; then microdnf install -y dnf; fi
-RUN dnf install -y --setopt=install_weak_deps=False --nodocs git curl bash nodejs npm \
+RUN if ! command -v dnf >/dev/null 2>&1; then microdnf install -y dnf; fi \
+    && dnf install -y --setopt=install_weak_deps=False --nodocs git curl bash nodejs npm \
+    && npm install -g pnpm \
+    && npm cache clean --force \
     && dnf clean all
-RUN npm install -g pnpm && npm cache clean --force
 
 WORKDIR /app
 
@@ -22,8 +23,8 @@ RUN git clone https://github.com/openclaw/openclaw.git . \
 
 FROM almalinux:10.1-minimal
 
-RUN if ! command -v dnf >/dev/null 2>&1; then microdnf install -y dnf; fi
-RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
+RUN if ! command -v dnf >/dev/null 2>&1; then microdnf install -y dnf; fi \
+    && dnf install -y --setopt=install_weak_deps=False --nodocs \
         net-tools \
         curl \
         openssl \
@@ -41,17 +42,16 @@ RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         dejavu-sans-fonts \
         nodejs \
         npm \
+    && npm install -g pnpm \
+    && npm cache clean --force \
+    && pip install --no-cache-dir matplotlib numpy reportlab fpdf2 weasyprint \
     && dnf clean all \
     && rm -rf /var/cache/dnf \
-    && localedef -i zh_CN -f UTF-8 zh_CN.UTF-8 || true \
+    && (localedef -i zh_CN -f UTF-8 zh_CN.UTF-8 || true) \
     && fc-cache -fv
-
-RUN npm install -g pnpm && npm cache clean --force
 
 WORKDIR /app
 COPY --from=builder /app /app
-
-RUN pip install --no-cache-dir matplotlib numpy reportlab fpdf2 weasyprint
 
 RUN mkdir -p /root/.config/matplotlib && \
     printf "font.family: sans-serif\nfont.sans-serif: Noto Sans CJK SC, DejaVu Sans\naxes.unicode_minus: False\n" \
@@ -61,8 +61,8 @@ EXPOSE 18789
 ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
 
-COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY docker/docker-entrypoint.sh docker/install_feishu_plugin.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/install_feishu_plugin.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
