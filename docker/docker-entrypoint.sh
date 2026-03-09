@@ -62,6 +62,9 @@ fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "⚠️ openclaw.json 不存在，首次启动允许未配置状态"
+    echo "安装官方飞书插件"
+    npx -y https://sf3-cn.feishucdn.com/obj/open-platform-opendoc/195a94cb3d9a45d862d417313ff62c9c_gfW8JbxtTd.tgz install
+    
     GATEWAY_ARGS="--allow-unconfigured --port 18789 --verbose --token ${GATEWAY_TOKEN}"
 else
     echo "✅ openclaw.json 已存在，直接启动"
