@@ -48,8 +48,8 @@ RUN dnf install -y jq openssl && dnf clean all
 WORKDIR /app
 COPY --from=builder /app /app
 
-# 将 openclaw 加入 PATH，可直接执行 openclaw 而不必 pnpm openclaw
-RUN ln -sf /app/node_modules/.bin/openclaw /usr/local/bin/openclaw
+# 将 openclaw 加入 PATH：用 wrapper 调用 pnpm openclaw（因 CLI 可能来自 script 而非 node_modules/.bin）
+RUN printf '%s\n' '#!/bin/sh' 'exec pnpm --dir /app openclaw "$@"' > /usr/local/bin/openclaw && chmod +x /usr/local/bin/openclaw
 
 # 安装 Python 依赖
 RUN pip install --no-cache-dir matplotlib numpy reportlab fpdf2 weasyprint
