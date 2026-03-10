@@ -32,6 +32,7 @@ WORKDIR /app
 
 FROM node-base AS builder
 
+ENV CI=true
 RUN dnf install -y git && dnf clean all
 RUN git clone https://github.com/openclaw/openclaw.git . && \
     pnpm install && \
