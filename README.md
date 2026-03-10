@@ -72,11 +72,13 @@ This image includes an entrypoint script that initializes configuration on first
 
 ```bash
 # for docker run example
-docker exec -it openclaw /bin/sh -c "pnpm openclaw config"
+docker exec -it openclaw openclaw config
 
 # for docker compose example (service name: openclawbot)
-docker compose exec openclawbot /bin/sh -c "pnpm openclaw config"
+docker compose exec openclawbot openclaw config
 ```
+
+（也可使用 `pnpm openclaw config`，镜像中已把 `openclaw` 加入 PATH。）
 
 Make sure the host `./config` directory is writable by the container, so configuration
 persists across restarts.

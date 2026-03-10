@@ -37,17 +37,21 @@ RUN git clone https://github.com/openclaw/openclaw.git . && \
     pnpm install && \
     pnpm ui:build && \
     pnpm build && \
-    pnpm openclaw setup
+    pnpm openclaw setup && \
+    pnpm prune --prod
 
 FROM node-base AS runtime
 
-RUN dnf install -y net-tools jq openssl && dnf clean all
+RUN dnf install -y jq openssl && dnf clean all
 
 WORKDIR /app
 COPY --from=builder /app /app
 
+# 将 openclaw 加入 PATH，可直接执行 openclaw 而不必 pnpm openclaw
+RUN ln -sf /app/node_modules/.bin/openclaw /usr/local/bin/openclaw
+
 # 安装 Python 依赖
-RUN pip install matplotlib numpy reportlab fpdf2 weasyprint
+RUN pip install --no-cache-dir matplotlib numpy reportlab fpdf2 weasyprint
 
 # 预配置 matplotlib 使用中文
 RUN mkdir -p /root/.config/matplotlib && \
