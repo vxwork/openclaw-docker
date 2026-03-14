@@ -23,7 +23,7 @@ jobs:
       packages: write
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
     
@@ -41,7 +41,7 @@ jobs:
      
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     # 登录到 GitHub Container Registry
     - name: Log into GitHub Container Registry
@@ -63,7 +63,7 @@ jobs:
     # 构建和推送 Docker 镜像到 GHCR
     - name: Build and push to GHCR
       id: build-and-push-ghcr
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         context: .
         file: ${{inputs.docker-file}}
