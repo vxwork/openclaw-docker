@@ -63,6 +63,10 @@ EXPOSE 18789
 # 设置环境变量
 ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
+# OpenClaw 低功耗/小主机建议：编译缓存 + 禁用自重启，减少开销
+ENV NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
+ENV OPENCLAW_NO_RESPAWN=1
+RUN mkdir -p /var/tmp/openclaw-compile-cache
 
 # Copy entrypoint and make executable
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
