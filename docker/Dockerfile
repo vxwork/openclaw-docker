@@ -38,7 +38,9 @@ RUN git clone https://github.com/openclaw/openclaw.git . && \
     pnpm install && \
     pnpm ui:build && \
     pnpm build && \
-    pnpm openclaw setup
+    pnpm openclaw setup && \
+    pnpm prune --prod && \
+    rm -rf .git .github
 
 FROM node-base AS runtime
 
@@ -53,8 +55,8 @@ RUN printf '%s\n' '#!/bin/sh' 'exec pnpm --dir /app openclaw "$@"' > /usr/local/
 # 安装 Python 依赖
 RUN pip install --no-cache-dir matplotlib numpy reportlab fpdf2 weasyprint
 
-# 预配置 matplotlib 使用中文
-RUN mkdir -p /root/.config/matplotlib && \
+# 预配置 matplotlib 使用中文，并创建 OpenClaw 编译缓存目录
+RUN mkdir -p /root/.config/matplotlib /var/tmp/openclaw-compile-cache && \
     printf "font.family: sans-serif\nfont.sans-serif: Noto Sans CJK SC, DejaVu Sans\naxes.unicode_minus: False\n" > /root/.config/matplotlib/matplotlibrc
 
 EXPOSE 18789
@@ -65,7 +67,6 @@ ENV LC_ALL=zh_CN.UTF-8
 # OpenClaw 低功耗/小主机建议：编译缓存 + 禁用自重启，减少开销
 ENV NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
 ENV OPENCLAW_NO_RESPAWN=1
-RUN mkdir -p /var/tmp/openclaw-compile-cache
 
 # Copy entrypoint and make executable
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

@@ -1,0 +1,8 @@
+# 减小 build context，避免无关文件参与构建
+.git
+.gitignore
+*.md
+.github
+Dockerfile
+docker-compose*.yml
+.dockerignore
