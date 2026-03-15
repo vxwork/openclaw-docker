@@ -38,8 +38,7 @@ RUN git clone https://github.com/openclaw/openclaw.git . && \
     pnpm install && \
     pnpm ui:build && \
     pnpm build && \
-    pnpm openclaw setup && \
-    pnpm prune --prod
+    pnpm openclaw setup
 
 FROM node-base AS runtime
 
