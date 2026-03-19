@@ -62,7 +62,8 @@ fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "⚠️ openclaw.json 不存在，首次启动允许未配置状态"
-    
+    echo "setup feishu plugin"
+    npx -y @larksuite/openclaw-lark install
     GATEWAY_ARGS="--allow-unconfigured --port 18789 --verbose --token ${GATEWAY_TOKEN}"
 else
     echo "✅ openclaw.json 已存在，直接启动"
