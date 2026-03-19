@@ -85,15 +85,7 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
 
 # 复制并应用必要的补丁（修复 extension entry escapes package directory 错误）
 COPY docker/patches/openclaw-discovery-entry-not-found.patch /tmp/openclaw-discovery-entry-not-found.patch
-RUN echo "Applying patch to fix discovery.ts..." && \
-    git apply --verbose /tmp/openclaw-discovery-entry-not-found.patch && \
-    echo "Patch applied successfully" && \
-    rm /tmp/openclaw-discovery-entry-not-found.patch || { \
-        echo "ERROR: Failed to apply patch. This may be due to:"; \
-        echo "1. Source code version mismatch"; \
-        echo "2. Patch file corruption"; \
-        echo "Continuing build without patch..."; \
-    }
+RUN git apply /tmp/openclaw-discovery-entry-not-found.patch && rm /tmp/openclaw-discovery-entry-not-found.patch
 
 # 安装依赖、构建项目并进行初始化设置
 # 分步执行以便更好地定位构建失败环节

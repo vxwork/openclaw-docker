@@ -1,5 +1,3 @@
-diff --git a/src/plugins/discovery.ts b/src/plugins/discovery.ts
-index 9c0ef1a..2c5d0b8 100644
 --- a/src/plugins/discovery.ts
 +++ b/src/plugins/discovery.ts
 @@ -446,6 +446,23 @@ function resolvePackageEntrySource(params: {
