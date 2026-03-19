@@ -1,7 +1,8 @@
 --- a/src/plugins/discovery.ts
 +++ b/src/plugins/discovery.ts
-@@ -446,6 +446,23 @@ function resolvePackageEntrySource(params: {
-   });
+@@ -443,9 +443,26 @@ function resolvePackageEntrySource(params: {
+     opened = await fs.promises.open(params.entryPath, "r").catch((error) => ({ error })),
+   );
    if (!opened.ok) {
 +    const code =
 +      typeof opened.error === "object" && opened.error !== null && "code" in opened.error
@@ -21,4 +22,3 @@
        source: params.sourceLabel,
      });
      return null;
-   }
