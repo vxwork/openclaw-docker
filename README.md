@@ -114,3 +114,35 @@ docker compose logs -f openclawbot
 docker exec -it openclaw /bin/sh       # docker run example
 docker compose exec openclawbot /bin/sh # compose example
 ```
+
+### Common Issues
+
+#### 1. Plugin Configuration Error: "extension entry escapes package directory"
+
+If you encounter this error during startup:
+```
+Failed to start CLI: Error: Config validation failed: plugins: plugin: extension entry escapes package directory: ./index.js
+```
+
+**Solution**: The Docker image includes a patch (`openclaw-discovery-entry-not-found.patch`) that fixes this issue. Make sure you're using the latest image version.
+
+#### 2. First-run Configuration Wizard
+
+By default, the container will prompt for configuration on first start. To skip the configuration wizard:
+
+**Using docker-compose:**
+```yaml
+environment:
+  - OPENCLAW_SKIP_CONFIG=true
+```
+
+**Using docker run:**
+```bash
+docker run -e OPENCLAW_SKIP_CONFIG=true ...
+```
+
+#### 3. Git Clone Failures
+
+If the build fails with git clone errors:
+- For public repositories: Check network connectivity
+- For private repositories: Use `--build-arg GITHUB_TOKEN=<your_token>` when building

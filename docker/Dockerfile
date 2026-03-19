@@ -83,9 +83,9 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
         } \
     fi
 
-# 应用必要的补丁（如有）
-# COPY docker/patches/openclaw-discovery-entry-not-found.patch /tmp/openclaw-discovery-entry-not-found.patch
-# RUN git apply /tmp/openclaw-discovery-entry-not-found.patch && rm /tmp/openclaw-discovery-entry-not-found.patch
+# 复制并应用必要的补丁（修复 extension entry escapes package directory 错误）
+COPY docker/patches/openclaw-discovery-entry-not-found.patch /tmp/openclaw-discovery-entry-not-found.patch
+RUN git apply /tmp/openclaw-discovery-entry-not-found.patch && rm /tmp/openclaw-discovery-entry-not-found.patch
 
 # 安装依赖、构建项目并进行初始化设置
 # 分步执行以便更好地定位构建失败环节

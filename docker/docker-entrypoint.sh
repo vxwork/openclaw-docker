@@ -64,7 +64,14 @@ if [ ! -f "$CONFIG_FILE" ]; then
     echo "⚠️ openclaw.json 不存在，首次启动允许未配置状态"
     #echo "setup feishu plugin"
     #npx -y @larksuite/openclaw-lark install
-    GATEWAY_ARGS="--allow-unconfigured --port 18789 --verbose --token ${GATEWAY_TOKEN}"
+    # 检查是否应该跳过配置向导
+    if [ "${OPENCLAW_SKIP_CONFIG:-false}" = "true" ]; then
+        echo "ℹ️ OPENCLAW_SKIP_CONFIG=true，跳过配置向导直接启动"
+        GATEWAY_ARGS="--allow-unconfigured --port 18789 --verbose --token ${GATEWAY_TOKEN}"
+    else
+        echo "ℹ️ 未设置 OPENCLAW_SKIP_CONFIG，将启动配置向导（如需跳过请设置 OPENCLAW_SKIP_CONFIG=true）"
+        GATEWAY_ARGS="--allow-unconfigured --port 18789 --verbose --token ${GATEWAY_TOKEN}"
+    fi
 else
     echo "✅ openclaw.json 已存在，直接启动"
     GATEWAY_ARGS="--port 18789 --verbose --token ${GATEWAY_TOKEN}"
