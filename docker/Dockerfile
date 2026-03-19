@@ -35,8 +35,8 @@ FROM node-base AS builder
 ENV CI=true
 RUN dnf install -y git && dnf clean all
 #COPY docker/patches/openclaw-discovery-entry-not-found.patch /tmp/openclaw-discovery-entry-not-found.patch
+#git apply /tmp/openclaw-discovery-entry-not-found.patch && \
 RUN git clone https://github.com/openclaw/openclaw.git . && \
-    #git apply /tmp/openclaw-discovery-entry-not-found.patch && \
     pnpm install && \
     pnpm ui:build && \
     pnpm build && \
