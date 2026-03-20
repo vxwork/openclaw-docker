@@ -12,6 +12,71 @@ EOF
     echo "✅ matplotlibrc 已生成（优先中文字体）"
 fi
 
+# ==================== 创建 openclaw 包装脚本 ====================
+# 用于拦截 config 命令并自动修复路径问题
+cat > /usr/local/bin/openclaw-wrapper <<'EOFWRAPPER'
+#!/bin/bash
+
+CONFIG_FILE="/root/.openclaw/openclaw.json"
+
+# 如果是 config 相关命令，执行后修复配置文件
+if [[ "$1" == "config" ]] || [[ "$*" == *"configure"* ]]; then
+    echo "ℹ️ 使用 openclaw config 包装器（将自动修复路径问题）"
+    # 执行原始的 openclaw 命令
+    if command -v openclaw >/dev/null 2>&1; then
+        openclaw "$@"
+        exit_code=$?
+    elif [ -f /app/package.json ] && command -v pnpm >/dev/null 2>&1; then
+        pnpm openclaw "$@"
+        exit_code=$?
+    else
+        echo "❌ 错误：找不到 openclaw 命令"
+        exit 1
+    fi
+    
+    # 如果命令成功执行，尝试修复配置文件
+    if [ $exit_code -eq 0 ] && [ -f "$CONFIG_FILE" ]; then
+        echo "✅ config 命令执行成功，检查配置文件..."
+        # 修复路径问题
+        if grep -q '"extensionEntry": "\./index.js"' "$CONFIG_FILE" 2>/dev/null; then
+            echo "⚠️ 检测到插件路径问题，正在修复..."
+            sed -i 's|"extensionEntry": "\./index.js"|"extensionEntry": "index.js"|g' "$CONFIG_FILE"
+            echo "✅ 配置文件路径已修复"
+        fi
+    fi
+    
+    exit $exit_code
+else
+    # 非 config 命令，直接转发
+    if command -v openclaw >/dev/null 2>&1; then
+        exec openclaw "$@"
+    elif [ -f /app/package.json ] && command -v pnpm >/dev/null 2>&1; then
+        exec pnpm openclaw "$@"
+    else
+        echo "❌ 错误：找不到 openclaw 命令"
+        exit 1
+    fi
+fi
+EOFWRAPPER
+
+chmod +x /usr/local/bin/openclaw-wrapper
+
+# 覆盖原始的 openclaw 命令
+if command -v openclaw >/dev/null 2>&1; then
+    # 备份原始命令
+    OPENCLAW_PATH=$(which openclaw)
+    echo "ℹ️ 备份原始 openclaw 命令位置：$OPENCLAW_PATH"
+    # 创建包装脚本作为新的 openclaw 命令
+    cat > /tmp/openclaw-wrapper-exec <<'EOFEXEC'
+#!/bin/bash
+exec /usr/local/bin/openclaw-wrapper "$@"
+EOFEXEC
+    chmod +x /tmp/openclaw-wrapper-exec
+    # 修改 PATH 让包装脚本优先
+    export PATH="/tmp:$PATH"
+    echo "✅ 已设置 openclaw 包装器"
+fi
+
 # ==================== OpenClaw 配置与启动逻辑 ====================
 
 CONFIG_DIR="/root/.openclaw"
