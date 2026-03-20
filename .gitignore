@@ -1,0 +1,34 @@
+# OpenClaw 源代码（构建过程中克隆）
+openclaw/
+src/
+
+# Docker 构建临时文件
+*.log
+tmp/
+temp/
+
+# 补丁应用临时文件
+*.patch.orig
+*.patch.rej
+
+# Node.js 依赖（构建产物）
+node_modules/
+
+# 构建产物
+dist/
+build/
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Git 目录（除了 .gitignore 本身）
+.git/*
+!.gitignore
