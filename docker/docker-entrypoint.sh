@@ -63,8 +63,8 @@ chmod +x /usr/local/bin/openclaw-wrapper
 
 # 覆盖原始的 openclaw 命令
 if command -v openclaw >/dev/null 2>&1; then
-    # 备份原始命令
-    OPENCLAW_PATH=$(which openclaw)
+    # 备份原始命令位置（使用 type -P 替代 which）
+    OPENCLAW_PATH=$(type -P openclaw 2>/dev/null || echo "unknown")
     echo "ℹ️ 备份原始 openclaw 命令位置：$OPENCLAW_PATH"
     # 创建包装脚本作为新的 openclaw 命令
     cat > /tmp/openclaw-wrapper-exec <<'EOFEXEC'
