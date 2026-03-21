@@ -56,7 +56,7 @@ WORKDIR /app
 
 # Python venv 部分保持不變...
 
-ENV PATH="/opt/venv/bin:/app/node_modules/.bin:/usr/local/bin:$PATH"   # 確保 pnpm 在 PATH 裡
+ENV PATH="/opt/venv/bin:/app/node_modules/.bin:/usr/local/bin:$PATH"   
 
 # ... useradd 註解部分保持 ...
 
