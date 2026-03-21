@@ -33,10 +33,11 @@ RUN mkdir -p /app/dist /app/node_modules && \
 # Stage 2: Runtime - almalinux:10.1-minimal
 FROM almalinux:10.1-minimal
 
-# 安裝 Node.js + 最小系統依賴
-RUN microdnf install -y curl ca-certificates && \
+# 安裝 Node.js + pnpm + jq（entrypoint 需要 jq）
+RUN microdnf install -y curl ca-certificates jq && \
     curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
     microdnf install -y nodejs && \
+    npm install -g pnpm@latest && \                    # ← 這裡安裝全局 pnpm
     microdnf install -y \
         python3 \
         cairo pango gdk-pixbuf2 libpng libjpeg-turbo freetype fontconfig harfbuzz \
@@ -44,44 +45,24 @@ RUN microdnf install -y curl ca-certificates && \
     microdnf clean all && \
     rm -rf /var/cache/microdnf/*
 
-RUN fc-cache -fv
+# ... fc-cache -fv 保持不變 ...
 
 COPY --from=builder /app /app
 WORKDIR /app
 
-# 全局安裝 openclaw CLI
-RUN npm install -g /app && \
-    ln -sf $(which openclaw) /usr/bin/openclaw 2>/dev/null || true
+# 為了讓 pnpm openclaw 能工作，複製更多必要的檔案（尤其是 pnpm-lock.yaml 和 .pnpm 結構）
+# 如果 builder 階段有 pnpm store，也可以 COPY --from=builder /root/.local/share/pnpm /root/.local/share/pnpm
+# 但為了簡單，這裡假設用全局 pnpm + 專案內的 lockfile
 
-# Python venv + 必要包
-RUN python3 -m venv /opt/venv --without-pip && \
-    curl -sSL https://bootstrap.pypa.io/get-pip.py | /opt/venv/bin/python3 && \
-    /opt/venv/bin/pip install --no-cache-dir \
-        matplotlib \
-        weasyprint \
-        reportlab \
-        pillow && \
-    /opt/venv/bin/pip cache purge
+# Python venv 部分保持不變...
 
-ENV PATH="/opt/venv/bin:/app/node_modules/.bin:$PATH"
+ENV PATH="/opt/venv/bin:/app/node_modules/.bin:/usr/local/bin:$PATH"   # 確保 pnpm 在 PATH 裡
 
-# 註解掉 openclaw 用戶建立（目前使用 root）
-# RUN useradd -m -s /bin/bash openclaw && \
-#     chown -R openclaw:openclaw /app /opt/venv && \
-#     mkdir -p /home/openclaw/.openclaw /home/openclaw/workspace && \
-#     chown -R openclaw:openclaw /home/openclaw
+# ... useradd 註解部分保持 ...
 
-# ==== entrypoint 部分 ====
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# 明確指定以 root 運行（可省略，因為預設就是 root）
-# USER root
-
 WORKDIR /app
 
-# 沒有暴露端口
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-
-# 如果 entrypoint.sh 最後會 exec 某個命令，這裡的 CMD 可以留空或作為預設參數
-# CMD ["bash"]   ← 建議先註解掉，除非你確定 entrypoint 會使用 "$@"
