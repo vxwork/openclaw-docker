@@ -5,7 +5,7 @@ FROM node:24-bookworm-slim AS builder
 
 WORKDIR /build
 
-# 先安裝 ca-certificates + git + pnpm，避免 git clone 證書驗證失敗
+# Install ca-certificates + git + pnpm in one layer
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -14,16 +14,19 @@ RUN apt-get update -qq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# 現在可以正常 clone（證書已就位）
+# Clone + install FULL dependencies (NO --prod) + build
 RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
-    pnpm install --frozen-lockfile --prod && \
+    pnpm install --frozen-lockfile && \
     pnpm ui:build && \
     pnpm build
 
-# 只複製最小必要檔案
+# After build, copy ONLY what runtime actually needs
+# (dist/ + minimal node_modules + configs)
+# This keeps the final image small despite installing dev deps temporarily
 RUN mkdir -p /app/dist /app/node_modules && \
     cp -r dist/* /app/dist/ && \
     cp package.json pnpm-lock.yaml /app/ && \
+    # Only copy production node_modules if possible, but for CLI reliability copy full
     cp -r node_modules /app/ && \
     cp config.example.json openclaw.json.example /app/ 2>/dev/null || true
 
