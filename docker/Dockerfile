@@ -5,11 +5,16 @@ FROM node:24-bookworm-slim AS builder
 
 WORKDIR /build
 
+# 先安裝 ca-certificates + git + pnpm，避免 git clone 證書驗證失敗
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git && \
     npm install -g pnpm@latest && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
+# 現在可以正常 clone（證書已就位）
 RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm install --frozen-lockfile --prod && \
     pnpm ui:build && \
@@ -57,19 +62,23 @@ RUN python3 -m venv /opt/venv --without-pip && \
 
 ENV PATH="/opt/venv/bin:/app/node_modules/.bin:$PATH"
 
-# 建立非 root 使用者
-#RUN useradd -m -s /bin/bash openclaw && \
-#    chown -R openclaw:openclaw /app /opt/venv && \
-#    mkdir -p /home/openclaw/.openclaw /home/openclaw/workspace && \
-#    chown -R openclaw:openclaw /home/openclaw
+# 註解掉 openclaw 用戶建立（目前使用 root）
+# RUN useradd -m -s /bin/bash openclaw && \
+#     chown -R openclaw:openclaw /app /opt/venv && \
+#     mkdir -p /home/openclaw/.openclaw /home/openclaw/workspace && \
+#     chown -R openclaw:openclaw /home/openclaw
 
-# ==== 你要求的 entrypoint 部分 ====
+# ==== entrypoint 部分 ====
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-#USER openclaw
+# 明確指定以 root 運行（可省略，因為預設就是 root）
+# USER root
+
 WORKDIR /app
 
-# 沒有暴露端口（符合你的要求）
+# 沒有暴露端口
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-#CMD ["bash"]
+
+# 如果 entrypoint.sh 最後會 exec 某個命令，這裡的 CMD 可以留空或作為預設參數
+# CMD ["bash"]   ← 建議先註解掉，除非你確定 entrypoint 會使用 "$@"
