@@ -21,19 +21,12 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm build && \
     # 标记 dist 为最新状态，避免运行时重新编译
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
-    # 清理 node_modules 中的开发工具，但保留 extensions 运行所需依赖
-    pnpm prune --prod 2>/dev/null || true
+    # 清理开发依赖，减小镜像体积
+    pnpm prune --prod && \
+    pnpm store prune
 
-# 只复制构建产物和必要文件（不包含 node_modules）
+# 准备运行时环境 - 复制完整项目（包含 node_modules）
 RUN mkdir -p /app && \
-    # 复制编译后的产物、源码和完整的依赖
-    # dist: 包含编译后的 JS 代码（包括 extensions 的编译结果）
-    # src: TypeScript 源码（用于时间戳检查）
-    # package.json + pnpm-lock.yaml: 依赖声明文件
-    # openclaw.mjs: CLI 主入口
-    # scripts: 启动脚本
-    # docs: 文档模板（包含 AGENTS.md 等必需模板）
-    # node_modules: 已安装的完整依赖（包含 extensions 所需依赖）
     cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs node_modules /app/ && \
     # 如果 config 目录存在，则复制它
     if [ -d "config" ]; then cp -r config /app/; fi && \
@@ -69,13 +62,9 @@ ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 
-# 从 builder 复制应用（只复制源码和构建产物）
+# 从 builder 复制应用（包含完整的 node_modules，避免重新安装导致插件路径问题）
 COPY --from=builder /app /app
 WORKDIR /app
-
-# 使用 builder 阶段已安装的完整依赖，无需重新安装
-# 保留 pnpm 全局安装以便在容器内使用 pnpm 命令
-RUN npm install -g pnpm@latest
 
 # 创建 openclaw CLI 的软链接
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && \
