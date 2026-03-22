@@ -13,6 +13,10 @@ log_warn()  { echo "⚠️  ${*}" >&2; }
 log_error() { echo "❌  ${*}" >&2; }
 log_success() { echo "✅  ${*}" >&2; }
 
+# ==================== 禁用 TypeScript 自动编译（提升启动速度） ====================
+export OPENCLAW_SKIP_TS_BUILD="true"
+log_info "已设置 OPENCLAW_SKIP_TS_BUILD=true，跳过 TypeScript 编译检查"
+
 # ==================== 生成随机 token 的函数（更健壮） ====================
 generate_token() {
     if command -v openssl >/dev/null 2>&1; then

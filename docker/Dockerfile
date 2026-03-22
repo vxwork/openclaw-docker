@@ -18,11 +18,15 @@ RUN apt-get update -qq && \
 RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm install --frozen-lockfile && \
     pnpm ui:build && \
-    pnpm build
+    pnpm build && \
+    # 标记 dist 为最新状态，避免运行时重新编译
+    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
 # 准备运行时环境 - 复制完整的项目目录
 RUN mkdir -p /app && \
-    cp -r . /app/
+    cp -r . /app/ && \
+    # 设置工作目录权限
+    chmod -R 755 /app
 
 # ==================== Stage 2: Runtime ====================
 FROM almalinux:10.1
