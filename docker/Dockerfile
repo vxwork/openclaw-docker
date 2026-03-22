@@ -24,7 +24,10 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
 
 # 只复制构建产物和必要文件（不包含 node_modules）
 RUN mkdir -p /app && \
-    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts config extensions docs /app/ && \
+    # 先复制确定存在的基础文件
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts extensions docs /app/ && \
+    # 如果 config 目录存在，则复制它
+    if [ -d "config" ]; then cp -r config /app/; fi && \
     chmod -R 755 /app && \
     # 清理构建目录
     rm -rf /build/*
