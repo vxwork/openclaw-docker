@@ -66,7 +66,7 @@ WORKDIR /app
 
 # 安装 Node.js 依赖（使用 pnpm，利用 lockfile 确保版本一致）
 RUN npm install -g pnpm@latest && \
-    pnpm install --frozen-lockfile --prod && \
+    pnpm install --frozen-lockfile && \
     pnpm store prune && \
     rm -rf /root/.local/share/pnpm/store
 
