@@ -20,18 +20,21 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm ui:build && \
     pnpm build && \
     # 标记 dist 为最新状态，避免运行时重新编译
-    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
+    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
+    # 清理 node_modules 中的开发工具，但保留 extensions 运行所需依赖
+    pnpm prune --prod 2>/dev/null || true
 
 # 只复制构建产物和必要文件（不包含 node_modules）
 RUN mkdir -p /app && \
-    # 复制编译后的产物和运行时必需的文件
+    # 复制编译后的产物、源码和完整的依赖
     # dist: 包含编译后的 JS 代码（包括 extensions 的编译结果）
     # src: TypeScript 源码（用于时间戳检查）
-    # package.json + pnpm-lock.yaml: 用于安装依赖
+    # package.json + pnpm-lock.yaml: 依赖声明文件
     # openclaw.mjs: CLI 主入口
     # scripts: 启动脚本
     # docs: 文档模板（包含 AGENTS.md 等必需模板）
-    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs /app/ && \
+    # node_modules: 已安装的完整依赖（包含 extensions 所需依赖）
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs node_modules /app/ && \
     # 如果 config 目录存在，则复制它
     if [ -d "config" ]; then cp -r config /app/; fi && \
     chmod -R 755 /app && \
@@ -70,11 +73,9 @@ ENV LANGUAGE=zh_CN:zh
 COPY --from=builder /app /app
 WORKDIR /app
 
-# 安装 Node.js 依赖（使用 pnpm，利用 lockfile 确保版本一致）
-RUN npm install -g pnpm@latest && \
-    pnpm install --frozen-lockfile && \
-    pnpm store prune && \
-    rm -rf /root/.local/share/pnpm/store
+# 使用 builder 阶段已安装的完整依赖，无需重新安装
+# 保留 pnpm 全局安装以便在容器内使用 pnpm 命令
+RUN npm install -g pnpm@latest
 
 # 创建 openclaw CLI 的软链接
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && \
