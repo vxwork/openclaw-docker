@@ -19,8 +19,6 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm install --frozen-lockfile && \
     pnpm ui:build && \
     pnpm build && \
-    # 全局安装 openclaw CLI 工具
-    npm install -g . && \
     # 标记 dist 为最新状态，避免运行时重新编译
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
@@ -48,6 +46,11 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
     npm install -g pnpm@latest && \
     dnf clean all
 
+# 从复制的源码中全局安装 openclaw CLI
+COPY --from=builder /app /tmp/openclaw-source
+RUN cd /tmp/openclaw-source && \
+    npm install -g . && \
+    rm -rf /tmp/openclaw-source
 
 # 配置字体缓存和 locale
 RUN fc-cache -fv
