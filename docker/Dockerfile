@@ -19,6 +19,8 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm install --frozen-lockfile && \
     pnpm ui:build && \
     pnpm build && \
+    # 全局安装 openclaw CLI 工具
+    npm install -g . && \
     # 标记 dist 为最新状态，避免运行时重新编译
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
