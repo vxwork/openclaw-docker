@@ -72,7 +72,7 @@ GATEWAY_ARGS=(
 if [ ! -f "${CONFIG_FILE}" ]; then
     log_warn "openclaw.json 不存在（首次启动允许未配置状态）"
 
-    if [ "${OPENCLAW_SKIP_CONFIG:-false}" = "true" ]; then
+    if [ "${OPENCLAW_SKIP_CONFIG:-true}" = "true" ]; then
         log_info "OPENCLAW_SKIP_CONFIG=true → 跳过配置向导，直接启动"
         GATEWAY_ARGS+=("--allow-unconfigured")
     else
