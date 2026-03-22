@@ -1,73 +1,114 @@
 # syntax=docker/dockerfile:1.7-labs
 
-# ==================== Stage 1: Builder ====================
+# ==================== Stage 1: Extension Dependencies ====================
+# Extract only package.json files from extensions to optimize cache layers
+FROM node:24-bookworm-slim AS ext-deps
+WORKDIR /extensions
+COPY openclaw/extensions ./
+RUN mkdir -p /out && \
+    for dir in */; do \
+      if [ -f "$dir/package.json" ]; then \
+        mkdir -p "/out/$dir" && \
+        cp "$dir/package.json" "/out/$dir/package.json"; \
+      fi; \
+    done
+
+# ==================== Stage 2: Builder ====================
 FROM node:24-bookworm-slim AS builder
 
 WORKDIR /build
 
-# 安装基础依赖
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        git && \
-    npm install -g pnpm@latest && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install Bun for build process
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+      if curl --retry 5 --retry-all-errors --retry-delay 2 -fsSL https://bun.sh/install | bash; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 5 ]; then \
+        exit 1; \
+      fi; \
+      sleep $((attempt * 2)); \
+    done
+ENV PATH="/root/.bun/bin:${PATH}"
 
-# 克隆源码并构建
-RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
-    pnpm install --frozen-lockfile && \
+RUN corepack enable
+
+# Install dependencies with cache optimization
+RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
+    NODE_OPTIONS="--max-old-space-size=2048" pnpm install --frozen-lockfile
+
+# Copy extension package.json files for proper dependency resolution
+COPY --from=ext-deps /out/ ./extensions/
+
+# Build project
+RUN pnpm build && \
     pnpm ui:build && \
-    pnpm build && \
-    # 标记 dist 为最新状态，避免运行时重新编译
+    # Mark dist as fresh to avoid runtime recompilation
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
-# 准备运行时环境 - 复制完整项目（包含 node_modules 和 extensions）
+# Prune dev dependencies and clean before copying to runtime
+RUN CI=true pnpm prune --prod 2>/dev/null || true && \
+    pnpm store prune 2>/dev/null || true
+
+# Prepare runtime directory with all necessary files
 RUN mkdir -p /app && \
-    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs extensions node_modules /app/ && \
-    # 如果 config 目录存在，则复制它
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs extensions /app/ && \
+    # Copy config if it exists (optional)
     if [ -d "config" ]; then cp -r config /app/; fi && \
     chmod -R 755 /app && \
-    # 清理构建目录
     rm -rf /build/*
 
-# ==================== Stage 2: Runtime ====================
+# ==================== Stage 3: Runtime Base ====================
 FROM almalinux:10.1
 
-# 设置时区为 UTC（与构建环境保持一致）
+# Set timezone early
 ENV TZ=UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# 安装系统依赖（精简版）
+# Install minimal system dependencies
 RUN dnf install -y epel-release && \
     dnf install -y --nodocs \
         curl ca-certificates jq python3 python3-pip \
         cairo pango gdk-pixbuf2 libpng libjpeg-turbo freetype fontconfig harfbuzz \
-        google-noto-sans-cjk-fonts glibc-langpack-zh && \
+        google-noto-sans-cjk-fonts glibc-langpack-zh procps-ng hostname openssl && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
-# 安装 Node.js 24
+# Install Node.js 24 from Nodesource
 RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
     dnf install -y nodejs && \
     dnf clean all
 
-# 配置字体缓存和 locale
+# Configure fonts and locale
 RUN fc-cache -fv
 
 ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 
-# 从 builder 复制应用（包含完整的 node_modules，避免重新安装导致插件路径问题）
-COPY --from=builder /app /app
 WORKDIR /app
 
-# 创建 openclaw CLI 的软链接
-RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && \
-    chmod 755 /app/openclaw.mjs
+# Copy application from builder (includes pruned node_modules)
+COPY --from=builder /app /app
 
-# 配置 Python 虚拟环境和依赖包
+# Create non-root user for security (matching OpenClaw official practice)
+#RUN chown -R 1000:1000 /app
+
+# Switch to non-root user
+#USER 1000
+
+# Expose default ports#
+#EXPOSE 18789 18792
+
+# Health check
+#HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+#    CMD curl -f http://localhost:18789/health || exit 1
+
+# Create openclaw CLI symlink
+RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
+
+# Configure Python virtual environment
 RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
     /opt/venv/bin/pip install --no-cache-dir \
@@ -79,7 +120,7 @@ RUN python3 -m venv /opt/venv && \
 
 ENV PATH="/opt/venv/bin:/app/node_modules/.bin:/usr/local/bin:$PATH"
 
-# 复制启动脚本
+# Copy entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
