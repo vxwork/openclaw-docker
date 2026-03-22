@@ -1,19 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 
-# ==================== Stage 1: Extension Dependencies ====================
-# Extract only package.json files from extensions to optimize cache layers
-FROM node:24-bookworm-slim AS ext-deps
-WORKDIR /extensions
-COPY openclaw/extensions ./
-RUN mkdir -p /out && \
-    for dir in */; do \
-      if [ -f "$dir/package.json" ]; then \
-        mkdir -p "/out/$dir" && \
-        cp "$dir/package.json" "/out/$dir/package.json"; \
-      fi; \
-    done
-
-# ==================== Stage 2: Builder ====================
+# ==================== Stage 1: Builder ====================
 FROM node:24-bookworm-slim AS builder
 
 WORKDIR /build
@@ -38,8 +25,15 @@ RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/sto
     git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     NODE_OPTIONS="--max-old-space-size=2048" pnpm install --frozen-lockfile
 
-# Copy extension package.json files for proper dependency resolution
-COPY --from=ext-deps /out/ ./extensions/
+# Extract extension package.json files for dependency caching
+RUN mkdir -p /ext-deps && \
+    for dir in extensions/*/; do \
+      if [ -f "$dir/package.json" ]; then \
+        ext_name=$(basename "$dir"); \
+        mkdir -p "/ext-deps/$ext_name" && \
+        cp "$dir/package.json" "/ext-deps/$ext_name/package.json"; \
+      fi; \
+    done
 
 # Build project
 RUN pnpm build && \
@@ -59,7 +53,7 @@ RUN mkdir -p /app && \
     chmod -R 755 /app && \
     rm -rf /build/*
 
-# ==================== Stage 3: Runtime Base ====================
+# ==================== Stage 2: Runtime ====================
 FROM almalinux:10.1
 
 # Set timezone early
