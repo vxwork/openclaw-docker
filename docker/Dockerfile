@@ -20,11 +20,9 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm ui:build && \
     pnpm build
 
-# 准备运行时环境（包含完整的源码和编译产物）
+# 准备运行时环境 - 复制完整的项目目录
 RUN mkdir -p /app && \
-    cp -r dist package.json pnpm-lock.yaml node_modules src scripts extensions config.example.json openclaw.json.example /app/ && \
-    # 复制构建配置文件（如果存在）
-    (ls tsconfig.json tsdown.config.* 2>/dev/null && cp -t /app tsconfig.json tsdown.config.* 2>/dev/null) || true
+    cp -r . /app/
 
 # ==================== Stage 2: Runtime ====================
 FROM almalinux:10.1
