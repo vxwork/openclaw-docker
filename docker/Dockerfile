@@ -22,9 +22,9 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     # 标记 dist 为最新状态，避免运行时重新编译
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
-# 准备运行时环境 - 复制完整项目（包含 node_modules）
+# 准备运行时环境 - 复制完整项目（包含 node_modules 和 extensions）
 RUN mkdir -p /app && \
-    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs node_modules /app/ && \
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs extensions node_modules /app/ && \
     # 如果 config 目录存在，则复制它
     if [ -d "config" ]; then cp -r config /app/; fi && \
     chmod -R 755 /app && \
