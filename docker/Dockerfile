@@ -51,13 +51,10 @@ RUN pnpm build && \
     # Mark dist as fresh to avoid runtime recompilation
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
-# Prune dev dependencies and clean before copying to runtime
-RUN CI=true pnpm prune --prod 2>/dev/null || true && \
-    pnpm store prune 2>/dev/null || true
-
-# Prepare runtime directory with all necessary files
+# Prepare runtime directory with all necessary files including full node_modules
+# Note: We skip pnpm prune to avoid removing runtime dependencies like tslog
 RUN mkdir -p /app && \
-    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs extensions /app/ && \
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs extensions node_modules /app/ && \
     # Copy config if it exists (optional)
     if [ -d "config" ]; then cp -r config /app/; fi && \
     chmod -R 755 /app && \
