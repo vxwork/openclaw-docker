@@ -27,7 +27,10 @@ RUN mkdir -p /app/dist /app/node_modules /app/scripts /app/extensions && \
     cp -r scripts/* /app/scripts/ && \
     cp -r src /app/src/ && \
     cp -r /build-extensions/* /app/extensions/ && \
-    cp config.example.json openclaw.json.example /app/ 2>/dev/null || true
+    cp config.example.json openclaw.json.example /app/ 2>/dev/null || true && \
+    echo "=== Extensions directory structure ===" && \
+    ls -la /app/extensions/ && \
+    ls -la /app/extensions/telegram/src/ 2>/dev/null || echo "telegram/src not found"
 
 # Stage 2: Runtime - 使用完整 almalinux:10.1（有 dnf，穩定）
 FROM almalinux:10.1
