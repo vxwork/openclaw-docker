@@ -20,18 +20,29 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm ui:build && \
     pnpm build && \
     # 标记 dist 为最新状态，避免运行时重新编译
-    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
+    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
+    # 清理 pnpm 缓存
+    pnpm store prune && \
+    rm -rf /root/.local/share/pnpm/store
 
-# 准备运行时环境 - 复制完整的项目目录
+# 准备运行时环境 - 只复制必要的内容
 RUN mkdir -p /app && \
-    cp -r . /app/ && \
-    # 设置工作目录权限
-    chmod -R 755 /app
+    # 只复制必要的文件和目录
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts config extensions /app/ 2>/dev/null || true && \
+    # 复制 node_modules（使用硬链接避免重复）
+    cp -rl node_modules /app/node_modules 2>/dev/null || cp -r node_modules /app/node_modules && \
+    chmod -R 755 /app && \
+    # 清理不必要的文件
+    rm -rf /build/*
 
 # ==================== Stage 2: Runtime ====================
 FROM almalinux:10.1
 
-# 安装系统依赖
+# 设置时区为 UTC（与构建环境保持一致）
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 安装系统依赖（精简版）
 RUN dnf install -y epel-release && \
     dnf install -y --nodocs \
         curl ca-certificates jq python3 python3-pip \
@@ -40,10 +51,9 @@ RUN dnf install -y epel-release && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
-# 安装 Node.js 24（与 builder 阶段保持一致）
+# 安装 Node.js 24
 RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
     dnf install -y nodejs && \
-    npm install -g pnpm@latest && \
     dnf clean all
 
 # 配置字体缓存和 locale
@@ -53,11 +63,11 @@ ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 
-# 复制应用
+# 从 builder 复制应用（只复制一次）
 COPY --from=builder /app /app
 WORKDIR /app
 
-# 创建 openclaw 命令的软链接（直接指向主入口文件）
+# 创建 openclaw CLI 的软链接
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && \
     chmod 755 /app/openclaw.mjs
 
