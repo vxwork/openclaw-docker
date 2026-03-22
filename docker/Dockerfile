@@ -46,12 +46,6 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
     npm install -g pnpm@latest && \
     dnf clean all
 
-# 从复制的源码中全局安装 openclaw CLI
-COPY --from=builder /app /tmp/openclaw-source
-RUN cd /tmp/openclaw-source && \
-    npm install -g . && \
-    rm -rf /tmp/openclaw-source
-
 # 配置字体缓存和 locale
 RUN fc-cache -fv
 
@@ -62,6 +56,11 @@ ENV LANGUAGE=zh_CN:zh
 # 复制应用
 COPY --from=builder /app /app
 WORKDIR /app
+
+# 创建 openclaw 命令的软链接（避免重复安装，节省空间）
+RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw || \
+    # 如果没有预编译的 bin，则从源码安装
+    npm install -g .
 
 # 配置 Python 虚拟环境和依赖包
 RUN python3 -m venv /opt/venv && \
