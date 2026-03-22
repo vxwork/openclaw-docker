@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1.7-labs
 
-# Stage 1: Builder（不變，已包含 ca-certificates + full deps）
+# ==================== Stage 1: Builder ====================
 FROM node:24-bookworm-slim AS builder
 
 WORKDIR /build
 
+# 安装基础依赖
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -13,29 +14,22 @@ RUN apt-get update -qq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# 克隆源码并构建
 RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm install --frozen-lockfile && \
-    mkdir -p /build-extensions && \
-    cp -r extensions /build-extensions/ && \
     pnpm ui:build && \
     pnpm build
 
-RUN mkdir -p /app/dist /app/node_modules /app/scripts /app/extensions && \
-    cp -r dist/* /app/dist/ && \
-    cp package.json pnpm-lock.yaml tsconfig.json tsdown.config.* /app/ && \
-    cp -r node_modules /app/ && \
-    cp -r scripts/* /app/scripts/ && \
-    cp -r src /app/src/ && \
-    cp -r /build-extensions/* /app/extensions/ && \
-    cp config.example.json openclaw.json.example /app/ 2>/dev/null || true && \
-    echo "=== Extensions directory structure ===" && \
-    ls -la /app/extensions/ && \
-    ls -la /app/extensions/telegram/src/ 2>/dev/null || echo "telegram/src not found"
+# 准备运行时环境（包含完整的源码和编译产物）
+RUN mkdir -p /app && \
+    cp -r dist package.json pnpm-lock.yaml node_modules src scripts extensions config.example.json openclaw.json.example /app/ && \
+    # 复制构建配置文件（如果存在）
+    (ls tsconfig.json tsdown.config.* 2>/dev/null && cp -t /app tsconfig.json tsdown.config.* 2>/dev/null) || true
 
-# Stage 2: Runtime - 使用完整 almalinux:10.1（有 dnf，穩定）
+# ==================== Stage 2: Runtime ====================
 FROM almalinux:10.1
 
-# 安裝必要包 + pnpm + jq
+# 安装系统依赖和运行时环境
 RUN dnf install -y epel-release && \
     dnf install -y --nodocs \
         curl ca-certificates jq nodejs npm python3 python3-pip \
@@ -45,17 +39,18 @@ RUN dnf install -y epel-release && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
+# 配置字体缓存和 locale
 RUN fc-cache -fv
 
-# 设置 locale 避免警告
 ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 
+# 复制应用
 COPY --from=builder /app /app
 WORKDIR /app
 
-# Python venv + 包
+# 配置 Python 虚拟环境和依赖包
 RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
     /opt/venv/bin/pip install --no-cache-dir \
@@ -67,14 +62,8 @@ RUN python3 -m venv /opt/venv && \
 
 ENV PATH="/opt/venv/bin:/app/node_modules/.bin:/usr/local/bin:$PATH"
 
-# 可選：保留 openclaw 用戶（root 運行）
-#RUN useradd -m -s /bin/bash openclaw && \
-#    chown -R openclaw:openclaw /app /opt/venv && \
-#    mkdir -p /home/openclaw/.openclaw /home/openclaw/workspace && \
-#    chown -R openclaw:openclaw /home/openclaw
-
+# 复制启动脚本
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-#CMD ["bash"]

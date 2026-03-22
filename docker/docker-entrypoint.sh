@@ -65,20 +65,14 @@ GATEWAY_ARGS=(
     "--token"   "${GATEWAY_TOKEN}"
 )
 
-# 可选：支持更多环境变量覆盖（推荐做法）
+# 可选：支持更多环境变量覆盖
 [ -n "${OPENCLAW_GATEWAY_BIND:-}" ]     && GATEWAY_ARGS+=("--bind"     "${OPENCLAW_GATEWAY_BIND}")
 [ -n "${OPENCLAW_GATEWAY_WS_LOG:-}" ]   && GATEWAY_ARGS+=("--ws-log"   "${OPENCLAW_GATEWAY_WS_LOG}")
 
+# 检查配置文件是否存在
 if [ ! -f "${CONFIG_FILE}" ]; then
     log_warn "openclaw.json 不存在（首次启动允许未配置状态）"
-
-    if [ "${OPENCLAW_SKIP_CONFIG:-true}" = "true" ]; then
-        log_info "OPENCLAW_SKIP_CONFIG=true → 跳过配置向导，直接启动"
-        GATEWAY_ARGS+=("--allow-unconfigured")
-    else
-        log_info "未设置 OPENCLAW_SKIP_CONFIG → 将尝试启动（可能进入配置流程）"
-        GATEWAY_ARGS+=("--allow-unconfigured")
-    fi
+    GATEWAY_ARGS+=("--allow-unconfigured")
 else
     log_success "openclaw.json 已存在 → 正常启动"
 fi
