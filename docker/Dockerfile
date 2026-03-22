@@ -43,12 +43,9 @@ RUN dnf install -y epel-release && \
 # 安装 Node.js 24（与 builder 阶段保持一致）
 RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
     dnf install -y nodejs && \
+    npm install -g pnpm@latest && \
     dnf clean all
 
-# 从 builder 阶段复制完整的 pnpm 安装
-COPY --from=builder /usr/local/lib/node_modules/pnpm /usr/local/lib/node_modules/pnpm
-COPY --from=builder /usr/local/bin/pnpm /usr/local/bin/pnpm
-COPY --from=builder /usr/local/bin/pnpx /usr/local/bin/pnpx
 
 # 配置字体缓存和 locale
 RUN fc-cache -fv
