@@ -58,7 +58,14 @@ ENV LC_ALL=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 
 # 从 builder 复制应用（只复制源码和构建产物）
-COPY --from=builder /app /app
+RUN mkdir -p /app && \
+    # 复制所有必需的文件和目录（使用 || true 避免因目录不存在而失败）
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts extensions docs /app/ 2>/dev/null || true && \
+    # 尝试复制 config 目录（如果存在）
+    [ -d "config" ] && cp -r config /app/ || true && \
+    chmod -R 755 /app && \
+    # 清理构建目录
+    rm -rf /build/*
 WORKDIR /app
 
 # 安装 Node.js 依赖（使用 pnpm，利用 lockfile 确保版本一致）
