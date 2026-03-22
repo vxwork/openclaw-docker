@@ -31,13 +31,16 @@ RUN mkdir -p /app && \
 # ==================== Stage 2: Runtime ====================
 FROM almalinux:10.1
 
+# 从 builder 阶段复制 pnpm，避免重新安装
+COPY --from=builder /usr/local/bin/pnpm /usr/local/bin/pnpm
+COPY --from=builder /usr/local/bin/pnpx /usr/local/bin/pnpx
+
 # 安装系统依赖和运行时环境
 RUN dnf install -y epel-release && \
     dnf install -y --nodocs \
         curl ca-certificates jq nodejs npm python3 python3-pip \
         cairo pango gdk-pixbuf2 libpng libjpeg-turbo freetype fontconfig harfbuzz \
         google-noto-sans-cjk-fonts glibc-langpack-zh && \
-    npm install -g pnpm@latest && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
