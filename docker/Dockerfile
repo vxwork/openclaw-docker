@@ -20,10 +20,7 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm ui:build && \
     pnpm build && \
     # 标记 dist 为最新状态，避免运行时重新编译
-    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
-    # 清理开发依赖，减小镜像体积
-    pnpm prune --prod && \
-    pnpm store prune
+    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
 # 准备运行时环境 - 复制完整项目（包含 node_modules）
 RUN mkdir -p /app && \
