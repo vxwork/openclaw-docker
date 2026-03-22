@@ -20,19 +20,13 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm ui:build && \
     pnpm build && \
     # 标记 dist 为最新状态，避免运行时重新编译
-    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
-    # 清理 pnpm 缓存
-    pnpm store prune && \
-    rm -rf /root/.local/share/pnpm/store
+    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
-# 准备运行时环境 - 只复制必要的内容
+# 只复制构建产物和必要文件（不包含 node_modules）
 RUN mkdir -p /app && \
-    # 只复制必要的文件和目录
-    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts config extensions /app/ 2>/dev/null || true && \
-    # 复制 node_modules（使用硬链接避免重复）
-    cp -rl node_modules /app/node_modules 2>/dev/null || cp -r node_modules /app/node_modules && \
+    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts config extensions docs /app/ && \
     chmod -R 755 /app && \
-    # 清理不必要的文件
+    # 清理构建目录
     rm -rf /build/*
 
 # ==================== Stage 2: Runtime ====================
@@ -63,9 +57,15 @@ ENV LANG=zh_CN.UTF-8
 ENV LC_ALL=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 
-# 从 builder 复制应用（只复制一次）
+# 从 builder 复制应用（只复制源码和构建产物）
 COPY --from=builder /app /app
 WORKDIR /app
+
+# 安装 Node.js 依赖（使用 pnpm，利用 lockfile 确保版本一致）
+RUN npm install -g pnpm@latest && \
+    pnpm install --frozen-lockfile --prod && \
+    pnpm store prune && \
+    rm -rf /root/.local/share/pnpm/store
 
 # 创建 openclaw CLI 的软链接
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && \
