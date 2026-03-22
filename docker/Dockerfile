@@ -18,10 +18,11 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     pnpm ui:build && \
     pnpm build
 
-RUN mkdir -p /app/dist /app/node_modules && \
+RUN mkdir -p /app/dist /app/node_modules /app/scripts && \
     cp -r dist/* /app/dist/ && \
     cp package.json pnpm-lock.yaml /app/ && \
     cp -r node_modules /app/ && \
+    cp -r scripts/* /app/scripts/ && \
     cp config.example.json openclaw.json.example /app/ 2>/dev/null || true
 
 # Stage 2: Runtime - 使用完整 almalinux:10.1（有 dnf，穩定）
@@ -32,12 +33,17 @@ RUN dnf install -y epel-release && \
     dnf install -y --nodocs \
         curl ca-certificates jq nodejs npm python3 python3-pip \
         cairo pango gdk-pixbuf2 libpng libjpeg-turbo freetype fontconfig harfbuzz \
-        google-noto-sans-cjk-fonts && \
+        google-noto-sans-cjk-fonts glibc-langpack-zh && \
     npm install -g pnpm@latest && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
 RUN fc-cache -fv
+
+# 设置 locale 避免警告
+ENV LANG=zh_CN.UTF-8
+ENV LC_ALL=zh_CN.UTF-8
+ENV LANGUAGE=zh_CN:zh
 
 COPY --from=builder /app /app
 WORKDIR /app
