@@ -57,10 +57,9 @@ ENV LANGUAGE=zh_CN:zh
 COPY --from=builder /app /app
 WORKDIR /app
 
-# 创建 openclaw 命令的软链接（避免重复安装，节省空间）
-RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw || \
-    # 如果没有预编译的 bin，则从源码安装
-    npm install -g .
+# 创建 openclaw 命令的软链接（直接指向主入口文件）
+RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && \
+    chmod 755 /app/openclaw.mjs
 
 # 配置 Python 虚拟环境和依赖包
 RUN python3 -m venv /opt/venv && \
