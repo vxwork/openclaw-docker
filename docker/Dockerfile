@@ -5,6 +5,15 @@ FROM node:24-bookworm-slim AS builder
 
 WORKDIR /build
 
+# Install base dependencies including git and curl
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install Bun for build process
 RUN set -eux; \
     for attempt in 1 2 3 4 5; do \
