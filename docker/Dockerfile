@@ -5,12 +5,13 @@ FROM node:24-bookworm-slim AS builder
 
 WORKDIR /build
 
-# Install base dependencies including git and curl
+# Install base dependencies including git, curl, and unzip (required for Bun)
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         git \
-        curl && \
+        curl \
+        unzip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
