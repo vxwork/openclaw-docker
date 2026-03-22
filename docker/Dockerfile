@@ -20,9 +20,10 @@ RUN git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
 
 RUN mkdir -p /app/dist /app/node_modules /app/scripts && \
     cp -r dist/* /app/dist/ && \
-    cp package.json pnpm-lock.yaml /app/ && \
+    cp package.json pnpm-lock.yaml tsconfig.json tsdown.config.* /app/ && \
     cp -r node_modules /app/ && \
     cp -r scripts/* /app/scripts/ && \
+    cp -r src /app/src/ && \
     cp config.example.json openclaw.json.example /app/ 2>/dev/null || true
 
 # Stage 2: Runtime - 使用完整 almalinux:10.1（有 dnf，穩定）
