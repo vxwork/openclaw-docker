@@ -122,6 +122,9 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_VERSION}.x | bash - && 
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
+# Generate and configure locale to avoid warnings
+RUN localedef -c en_US -i en_US -f UTF-8 en_US.UTF-8
+
 # Configure locale (minimal)
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
