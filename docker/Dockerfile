@@ -10,8 +10,11 @@ ARG OPENCLAW_BRANCH="main"
 WORKDIR /tmp/openclaw
 
 # Install git and clone repository (shallow clone for speed)
+# Must install ca-certificates first for HTTPS to work
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git && \
     rm -rf /var/lib/apt/lists/* && \
     git clone --depth=1 --branch=${OPENCLAW_BRANCH} ${OPENCLAW_REPO} .
 
@@ -36,6 +39,7 @@ ARG OPENCLAW_REPO="https://github.com/openclaw/openclaw.git"
 ARG OPENCLAW_BRANCH="main"
 
 # Install base dependencies including git, curl, unzip
+# Must install ca-certificates first for HTTPS operations
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
