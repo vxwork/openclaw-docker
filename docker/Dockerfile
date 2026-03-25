@@ -1,3 +1,37 @@
+# syntax=docker/dockerfile:1.7
+
+# ==================== Stage 1: Extension Dependencies ====================
+# Extract only package.json files from extensions for better cache utilization
+FROM node:24-bookworm-slim AS ext-deps
+
+ARG OPENCLAW_REPO="https://github.com/openclaw/openclaw.git"
+ARG OPENCLAW_BRANCH="main"
+
+WORKDIR /tmp/openclaw
+
+# Install git and clone repository (shallow clone for speed)
+# Must install ca-certificates first for HTTPS to work
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git && \
+    rm -rf /var/lib/apt/lists/* && \
+    git clone --depth=1 --branch=${OPENCLAW_BRANCH} ${OPENCLAW_REPO} .
+
+WORKDIR /tmp/extensions
+
+# Copy extensions from cloned repository
+RUN cp -r /tmp/openclaw/extensions/. .
+
+RUN mkdir -p /out && \
+    for dir in */; do \
+      if [ -f "$dir/package.json" ]; then \
+        ext_name=$(basename "$dir"); \
+        mkdir -p "/out/$ext_name" && \
+        cp "$dir/package.json" "/out/$ext_name/package.json"; \
+      fi; \
+    done
+
 # ==================== Stage 2: Builder ====================
 FROM node:24-bookworm-slim AS builder
 
