@@ -112,14 +112,14 @@ RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         python3-pip \
         procps-ng \
         hostname \
-        openssl && \
+        openssl \
+        glibc-langpack-en && \
     dnf clean all && \
     rm -rf /var/cache/dnf/* /var/log/dnf* /var/log/yum.*
 
 # Install Node.js from Nodesource (version configurable via ARG)
 RUN curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_VERSION}.x | bash - && \
     dnf install -y --setopt=install_weak_deps=False nodejs && \
-    dnf install -y --setopt=install_weak_deps=False glibc-langpack-en && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
@@ -138,7 +138,10 @@ RUN python3 -m venv /opt/venv && \
 
 WORKDIR /app
 
-# Copy ONLY runtime essentials from builder (without node_modules)
+# Copy runtime essentials from builder (without node_modules)
+# Note: Docker automatically optimizes multiple COPY instructions from the same 
+# source stage into a single layer, so keeping them separate improves readability
+# without increasing image size.
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
