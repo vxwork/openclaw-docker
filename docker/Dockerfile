@@ -79,26 +79,15 @@ RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/sto
 # Copy full source code again (this will use cache if extensions didn't change)
 RUN rm -rf extensions && git checkout extensions
 
-# Build project
+# Build project, prune dependencies, and clean in single layer
 RUN pnpm build && \
     pnpm ui:build && \
-    # Mark dist as fresh to avoid runtime recompilation
-    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
-
-# Clean build artifacts but keep all dependencies for now
-RUN find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
-    # Clean pnpm store and caches only (don't prune node_modules yet)
-    pnpm store prune && \
-    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
-
-# Prune production dependencies only and clean thoroughly
-RUN CI=true pnpm prune --prod && \
+    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
+    CI=true pnpm prune --prod && \
     find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
-    # Remove unnecessary directories from node_modules
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
     find node_modules -name "*.ts" -delete 2>/dev/null || true && \
     find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
-    # Clean pnpm store and caches
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
 
@@ -148,33 +137,26 @@ RUN python3 -m venv /opt/venv && \
 
 WORKDIR /app
 
-# Copy ONLY runtime essentials from builder (without node_modules)
+# Copy ONLY runtime essentials from builder (without node_modules and docs)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder /app/openclaw.mjs ./openclaw.mjs
-# Copy only extensions directory (required for plugins)
 COPY --from=builder /app/extensions ./extensions
-# Skip docs to save space - uncomment if needed
-COPY --from=builder /app/docs ./docs
+# Skip docs to save space (~200-300MB)
 
-# Install production dependencies only in runtime stage
+# Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
     pnpm install --frozen-lockfile --prod && \
-    # Clean pnpm store after installation
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
-    # Remove markdown and TypeScript files from node_modules
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
     find node_modules -name "*.ts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.tsx" -delete 2>/dev/null || true
+    find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
+    chmod -R 755 /app && \
+    ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
 
-# Set proper permissions
-RUN chmod -R 755 /app
-
-# Create openclaw CLI symlink
-RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
-
+# Set proper permissions and create symlink (already done in RUN above)
 # Setup Python virtual environment path
 ENV PATH="/opt/venv/bin:/usr/local/bin:$PATH"
 
