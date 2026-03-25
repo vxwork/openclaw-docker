@@ -119,17 +119,11 @@ RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
 # Install Node.js from Nodesource (version configurable via ARG)
 RUN curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_VERSION}.x | bash - && \
     dnf install -y --setopt=install_weak_deps=False nodejs && \
+    dnf install -y --setopt=install_weak_deps=False glibc-langpack-en && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
-# Generate and configure locale to avoid warnings
-# Install glibc-langpack-en for English locale support
-RUN dnf install -y --setopt=install_weak_deps=False glibc-langpack-en && \
-    localedef -c en_US -i en_US -f UTF-8 en_US.UTF-8 && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf/*
-
-# Configure locale (minimal)
+# Configure locale using glibc-langpack-en
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV LANGUAGE=en_US:en
