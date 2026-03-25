@@ -138,13 +138,14 @@ RUN python3 -m venv /opt/venv && \
 
 WORKDIR /app
 
-# Copy ONLY runtime essentials from builder (without node_modules and docs)
+# Copy ONLY runtime essentials from builder (without node_modules)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder /app/openclaw.mjs ./openclaw.mjs
 COPY --from=builder /app/extensions ./extensions
-# Skip docs to save space (~200-300MB)
+# Copy docs/reference/templates (required for workspace setup)
+COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
