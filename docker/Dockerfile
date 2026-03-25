@@ -1,11 +1,41 @@
-# syntax=docker/dockerfile:1.7-labs
+# syntax=docker/dockerfile:1.7
 
-# ==================== Stage 1: Builder ====================
+# ==================== Stage 1: Extension Dependencies ====================
+# Extract only package.json files from extensions for better cache utilization
+FROM node:24-bookworm-slim AS ext-deps
+
+ARG OPENCLAW_REPO="https://github.com/openclaw/openclaw.git"
+ARG OPENCLAW_BRANCH="main"
+
+WORKDIR /tmp/openclaw
+
+# Install git and clone repository (shallow clone for speed)
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/* && \
+    git clone --depth=1 --branch=${OPENCLAW_BRANCH} ${OPENCLAW_REPO} .
+
+WORKDIR /tmp/extensions
+
+# Copy extensions from cloned repository
+RUN cp -r /tmp/openclaw/extensions/. .
+
+RUN mkdir -p /out && \
+    for dir in */; do \
+      if [ -f "$dir/package.json" ]; then \
+        ext_name=$(basename "$dir"); \
+        mkdir -p "/out/$ext_name" && \
+        cp "$dir/package.json" "/out/$ext_name/package.json"; \
+      fi; \
+    done
+
+# ==================== Stage 2: Builder ====================
 FROM node:24-bookworm-slim AS builder
 
-WORKDIR /build
+ARG OPENCLAW_REPO="https://github.com/openclaw/openclaw.git"
+ARG OPENCLAW_BRANCH="main"
 
-# Install base dependencies including git, curl, and unzip (required for Bun)
+# Install base dependencies including git, curl, unzip
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -15,7 +45,7 @@ RUN apt-get update -qq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Bun for build process
+# Install Bun for build process (with retry logic)
 RUN set -eux; \
     for attempt in 1 2 3 4 5; do \
       if curl --retry 5 --retry-all-errors --retry-delay 2 -fsSL https://bun.sh/install | bash; then \
@@ -28,22 +58,22 @@ RUN set -eux; \
     done
 ENV PATH="/root/.bun/bin:${PATH}"
 
-RUN corepack enable
+RUN corepack enable pnpm
+
+WORKDIR /app
+
+# Clone OpenClaw repository (shallow clone)
+RUN git clone --depth=1 --branch=${OPENCLAW_BRANCH} ${OPENCLAW_REPO} .
+
+# Copy extension package.json files from ext-deps stage for dependency caching
+COPY --from=ext-deps /out/ ./extensions/
 
 # Install dependencies with cache optimization
 RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    git clone --depth=1 https://github.com/openclaw/openclaw.git . && \
     NODE_OPTIONS="--max-old-space-size=2048" pnpm install --frozen-lockfile
 
-# Extract extension package.json files for dependency caching
-RUN mkdir -p /ext-deps && \
-    for dir in extensions/*/; do \
-      if [ -f "$dir/package.json" ]; then \
-        ext_name=$(basename "$dir"); \
-        mkdir -p "/ext-deps/$ext_name" && \
-        cp "$dir/package.json" "/ext-deps/$ext_name/package.json"; \
-      fi; \
-    done
+# Copy full source code again (this will use cache if extensions didn't change)
+RUN rm -rf extensions && git checkout extensions
 
 # Build project
 RUN pnpm build && \
@@ -51,65 +81,56 @@ RUN pnpm build && \
     # Mark dist as fresh to avoid runtime recompilation
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
-# Prepare runtime directory with all necessary files including full node_modules
-# Note: We skip pnpm prune to avoid removing runtime dependencies like tslog
-RUN mkdir -p /app && \
-    cp -r dist src package.json pnpm-lock.yaml openclaw.mjs scripts docs extensions node_modules /app/ && \
-    # Copy config if it exists (optional)
-    if [ -d "config" ]; then cp -r config /app/; fi && \
-    chmod -R 755 /app && \
-    rm -rf /build/*
+# Prune dev dependencies and clean build artifacts
+RUN CI=true pnpm prune --prod && \
+    find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true
 
-# ==================== Stage 2: Runtime ====================
-FROM almalinux:10.1
+# ==================== Stage 3: Runtime ====================
+FROM almalinux:10.1 AS runtime
 
 # Set timezone early
 ENV TZ=UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Install minimal system dependencies
-RUN dnf install -y epel-release && \
-    dnf install -y --nodocs \
-        curl ca-certificates jq python3 python3-pip \
-        cairo pango gdk-pixbuf2 libpng libjpeg-turbo freetype fontconfig harfbuzz \
-        google-noto-sans-cjk-fonts glibc-langpack-zh procps-ng hostname openssl && \
+# Allow overriding Node.js version at build time (default to latest LTS)
+ARG NODEJS_VERSION="24"
+
+# Install minimal system dependencies in single layer
+RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
+        epel-release && \
+    dnf install -y --setopt=install_weak_deps=False --nodocs \
+        curl \
+        ca-certificates \
+        git \
+        python3 \
+        python3-pip \
+        procps-ng \
+        hostname \
+        openssl \
+        cairo \
+        pango \
+        gdk-pixbuf2 \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        fontconfig \
+        harfbuzz \
+        google-noto-sans-cjk-fonts && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf/* /var/log/dnf* /var/log/yum.*
+
+# Install Node.js from Nodesource (version configurable via ARG)
+RUN curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_VERSION}.x | bash - && \
+    dnf install -y --setopt=install_weak_deps=False nodejs && \
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
-# Install Node.js 24 from Nodesource
-RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
-    dnf install -y nodejs && \
-    dnf clean all
+# Configure locale
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LANGUAGE=en_US:en
 
-# Configure fonts and locale
-RUN fc-cache -fv
-
-ENV LANG=zh_CN.UTF-8
-ENV LC_ALL=zh_CN.UTF-8
-ENV LANGUAGE=zh_CN:zh
-
-WORKDIR /app
-
-# Copy application from builder (includes pruned node_modules)
-COPY --from=builder /app /app
-
-# Create non-root user for security (matching OpenClaw official practice)
-#RUN chown -R 1000:1000 /app
-
-# Switch to non-root user
-#USER 1000
-
-# Expose default ports#
-#EXPOSE 18789 18792
-
-# Health check
-#HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-#    CMD curl -f http://localhost:18789/health || exit 1
-
-# Create openclaw CLI symlink
-RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
-
-# Configure Python virtual environment
+# Install Python packages for skills
 RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
     /opt/venv/bin/pip install --no-cache-dir \
@@ -119,7 +140,24 @@ RUN python3 -m venv /opt/venv && \
         pillow && \
     /opt/venv/bin/pip cache purge
 
-ENV PATH="/opt/venv/bin:/app/node_modules/.bin:/usr/local/bin:$PATH"
+WORKDIR /app
+
+# Copy application from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/openclaw.mjs ./openclaw.mjs
+COPY --from=builder /app/extensions ./extensions
+COPY --from=builder /app/docs ./docs
+
+# Set proper permissions
+RUN chmod -R 755 /app
+
+# Create openclaw CLI symlink
+RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
+
+# Setup Python virtual environment path
+ENV PATH="/opt/venv/bin:/usr/local/bin:$PATH"
 
 # Copy entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
