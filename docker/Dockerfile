@@ -1,37 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
-# ==================== Stage 1: Extension Dependencies ====================
-# Extract only package.json files from extensions for better cache utilization
-FROM node:24-bookworm-slim AS ext-deps
-
-ARG OPENCLAW_REPO="https://github.com/openclaw/openclaw.git"
-ARG OPENCLAW_BRANCH="main"
-
-WORKDIR /tmp/openclaw
-
-# Install git and clone repository (shallow clone for speed)
-# Must install ca-certificates first for HTTPS to work
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        git && \
-    rm -rf /var/lib/apt/lists/* && \
-    git clone --depth=1 --branch=${OPENCLAW_BRANCH} ${OPENCLAW_REPO} .
-
-WORKDIR /tmp/extensions
-
-# Copy extensions from cloned repository
-RUN cp -r /tmp/openclaw/extensions/. .
-
-RUN mkdir -p /out && \
-    for dir in */; do \
-      if [ -f "$dir/package.json" ]; then \
-        ext_name=$(basename "$dir"); \
-        mkdir -p "/out/$ext_name" && \
-        cp "$dir/package.json" "/out/$ext_name/package.json"; \
-      fi; \
-    done
-
 # ==================== Stage 2: Builder ====================
 FROM node:24-bookworm-slim AS builder
 
@@ -84,6 +50,12 @@ RUN pnpm build && \
     pnpm ui:build && \
     # Mark dist as fresh to avoid runtime recompilation
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
+
+# Clean build artifacts but keep all dependencies for now
+RUN find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
+    # Clean pnpm store and caches only (don't prune node_modules yet)
+    pnpm store prune && \
+    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
 
 # Prune production dependencies only and clean thoroughly
 RUN CI=true pnpm prune --prod && \
@@ -142,13 +114,26 @@ RUN python3 -m venv /opt/venv && \
 
 WORKDIR /app
 
-# Copy application from builder
+# Copy ONLY runtime essentials from builder (without node_modules)
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder /app/openclaw.mjs ./openclaw.mjs
+# Copy only extensions directory (required for plugins)
 COPY --from=builder /app/extensions ./extensions
+# Skip docs to save space - uncomment if needed
 COPY --from=builder /app/docs ./docs
+
+# Install production dependencies only in runtime stage
+RUN corepack enable pnpm && \
+    pnpm install --frozen-lockfile --prod && \
+    # Clean pnpm store after installation
+    pnpm store prune && \
+    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
+    # Remove markdown and TypeScript files from node_modules
+    find node_modules -name "*.md" -delete 2>/dev/null || true && \
+    find node_modules -name "*.ts" -delete 2>/dev/null || true && \
+    find node_modules -name "*.tsx" -delete 2>/dev/null || true
 
 # Set proper permissions
 RUN chmod -R 755 /app
