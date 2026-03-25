@@ -93,7 +93,7 @@ RUN CI=true pnpm prune --prod && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
 
 # ==================== Stage 3: Runtime ====================
-FROM almalinux:10.1-minimal AS runtime
+FROM almalinux:10.1 AS runtime
 
 # Set timezone early
 ENV TZ=UTC
@@ -103,6 +103,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ARG NODEJS_VERSION="24"
 
 # Install minimal system dependencies in single layer
+# Use dnf with aggressive cleanup for minimal footprint
 RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         epel-release && \
     dnf install -y --setopt=install_weak_deps=False --nodocs \
