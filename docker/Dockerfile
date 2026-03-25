@@ -123,7 +123,11 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_VERSION}.x | bash - && 
     rm -rf /var/cache/dnf/*
 
 # Generate and configure locale to avoid warnings
-RUN localedef -c en_US -i en_US -f UTF-8 en_US.UTF-8
+# Install glibc-langpack-en for English locale support
+RUN dnf install -y --setopt=install_weak_deps=False glibc-langpack-en && \
+    localedef -c en_US -i en_US -f UTF-8 en_US.UTF-8 && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf/*
 
 # Configure locale (minimal)
 ENV LANG=en_US.UTF-8
