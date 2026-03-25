@@ -81,12 +81,19 @@ RUN pnpm build && \
     # Mark dist as fresh to avoid runtime recompilation
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true
 
-# Prune dev dependencies and clean build artifacts
+# Prune production dependencies only and clean thoroughly
 RUN CI=true pnpm prune --prod && \
-    find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true
+    find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
+    # Remove unnecessary directories from node_modules
+    find node_modules -name "*.md" -delete 2>/dev/null || true && \
+    find node_modules -name "*.ts" -delete 2>/dev/null || true && \
+    find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
+    # Clean pnpm store and caches
+    pnpm store prune && \
+    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
 
 # ==================== Stage 3: Runtime ====================
-FROM almalinux:10.1 AS runtime
+FROM almalinux:10.1-minimal AS runtime
 
 # Set timezone early
 ENV TZ=UTC
@@ -101,21 +108,11 @@ RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
     dnf install -y --setopt=install_weak_deps=False --nodocs \
         curl \
         ca-certificates \
-        git \
         python3 \
         python3-pip \
         procps-ng \
         hostname \
-        openssl \
-        cairo \
-        pango \
-        gdk-pixbuf2 \
-        libpng \
-        libjpeg-turbo \
-        freetype \
-        fontconfig \
-        harfbuzz \
-        google-noto-sans-cjk-fonts && \
+        openssl && \
     dnf clean all && \
     rm -rf /var/cache/dnf/* /var/log/dnf* /var/log/yum.*
 
@@ -125,17 +122,15 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_VERSION}.x | bash - && 
     dnf clean all && \
     rm -rf /var/cache/dnf/*
 
-# Configure locale
+# Configure locale (minimal)
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 
-# Install Python packages for skills
+# Install Python packages for skills (only essential ones)
 RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
     /opt/venv/bin/pip install --no-cache-dir \
-        matplotlib \
-        weasyprint \
         reportlab \
         pillow && \
     /opt/venv/bin/pip cache purge
