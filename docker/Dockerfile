@@ -147,6 +147,7 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder /app/openclaw.mjs ./openclaw.mjs
 COPY --from=builder /app/extensions ./extensions
+COPY --from=builder /app/scripts ./scripts
 # Copy docs/reference/templates (required for workspace setup)
 COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
