@@ -82,7 +82,7 @@ RUN rm -rf extensions && git checkout extensions
 # Build project, prune dependencies, and clean in single layer
 RUN pnpm build && \
     pnpm ui:build && \
-    pnpm add @larksuiteoapi/node-sdk https-proxy-agent @sinclair/typebox @aws-sdk/client-bedrock zod --prod --workspace-root && \
+    pnpm add @larksuiteoapi/node-sdk https-proxy-agent --workspace-root && \
     node scripts/postinstall-bundled-plugins.mjs || true && \
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
     CI=true pnpm prune --prod && \
@@ -155,22 +155,39 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
-    pnpm install --frozen-lockfile --prod && \
-    # === 修复 feishu 插件依赖（关键新增）===
-    pnpm add @larksuiteoapi/node-sdk https-proxy-agent --prod && \
-    # 如果还有其他 feishu 依赖，也可以一起加（常见的有 @sinclair/typebox、zod）
-    pnpm add @sinclair/typebox zod --prod && \
-    # 执行 bundled plugins postinstall（确保插件被正确处理）
+    # 1. 基础生产依赖安装
+    pnpm install --frozen-lockfile --prod && \    
+    # 2. 强制添加所有常见 bundled plugins 的缺失依赖（一次性解决 feishu + amazon-bedrock + 其他）
+    pnpm add \
+      @larksuiteoapi/node-sdk \
+      https-proxy-agent \
+      @aws-sdk/client-bedrock \
+      @aws-sdk/client-sts \
+      @aws-sdk/credential-providers \
+      @sinclair/typebox \
+      zod \
+      --prod && \    
+    # 3. 对 amazon-bedrock 插件目录单独安装（最可靠的兜底）
+    echo "=== Installing amazon-bedrock plugin dependencies manually ===" && \
+    cd /app/extensions/amazon-bedrock && \
+    pnpm install --prod --no-frozen-lockfile || \
+      echo "Warning: amazon-bedrock local install had issues, continuing..." && \
+    cd /app && \    
+    # 4. 对 feishu 也再做一次（防止之前没完全生效）
+    cd /app/extensions/feishu && \
+    pnpm install --prod --no-frozen-lockfile || true && \
+    cd /app && \    
+    # 5. 执行 postinstall（允许失败）
     node scripts/postinstall-bundled-plugins.mjs || \
-      echo "Warning: postinstall-bundled-plugins.mjs had issues, continuing..." && \
-    # 修复 bin 问题（保留你之前的处理）
+      echo "Warning: postinstall-bundled-plugins.mjs failed (npm compatibility), continuing..." && \    
+    # 6. 修复 bin 问题
     pnpm rebuild --recursive || true && \
     for bin in rolldown vite esbuild playwright; do \
       if command -v $bin >/dev/null 2>&1; then \
         ln -sf "$(command -v $bin)" "/app/node_modules/.bin/$bin" || true; \
       fi; \
-    done && \
-    # 清理
+    done && \    
+    # 7. 清理
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
