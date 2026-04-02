@@ -153,8 +153,20 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
+    # 先安装生产依赖（--prod）
     pnpm install --frozen-lockfile --prod && \
+    # 强制添加 feishu 插件需要的代理依赖（你之前已经加了，保留）
     pnpm add https-proxy-agent --prod && \
+    # 关键：手动执行 postinstall 脚本，确保 bundled plugins（包括 feishu）被正确处理
+    node scripts/postinstall-bundled-plugins.mjs || echo "postinstall completed with warnings" && \
+    # 修复 bin symlink 问题（最重要）
+    pnpm rebuild --recursive || true && \
+    # 手动修复常见 bin（防止 rolldown/vite/esbuild/playwright 警告影响插件加载）
+    (pnpm exec rolldown --print-path 2>/dev/null && ln -sf "$(pnpm exec rolldown --silent --print-path)" /app/node_modules/.bin/rolldown || true) && \
+    (pnpm exec vite --print-path 2>/dev/null && ln -sf "$(pnpm exec vite --silent --print-path)" /app/node_modules/.bin/vite || true) && \
+    (pnpm exec esbuild --print-path 2>/dev/null && ln -sf "$(pnpm exec esbuild --silent --print-path)" /app/node_modules/.bin/esbuild || true) && \
+    (pnpm exec playwright --print-path 2>/dev/null && ln -sf "$(pnpm exec playwright --silent --print-path)" /app/node_modules/.bin/playwright || true) && \
+    # 清理
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
