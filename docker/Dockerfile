@@ -82,6 +82,7 @@ RUN rm -rf extensions && git checkout extensions
 # Build project, prune dependencies, and clean in single layer
 RUN pnpm build && \
     pnpm ui:build && \
+    pnpm add @larksuiteoapi/node-sdk https-proxy-agent @sinclair/typebox @aws-sdk/client-bedrock zod --prod --workspace-root && \
     node scripts/postinstall-bundled-plugins.mjs || true && \
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
     CI=true pnpm prune --prod && \
@@ -154,22 +155,19 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
-    # 1. 强制使用 pnpm（避免任何 npm 调用）
     pnpm install --frozen-lockfile --prod && \
-    # 2. 确保 https-proxy-agent 存在（feishu 插件需要）
-    pnpm add https-proxy-agent --prod && \
-    # 3. 显式执行 postinstall 脚本，但绕过内部 npm 调用（最重要！）
-    #    如果脚本内部强制用 npm，可以临时跳过依赖安装部分，或修复脚本
-    NODE_ENV=production node scripts/postinstall-bundled-plugins.mjs || \
-      echo "Warning: postinstall-bundled-plugins.mjs failed, continuing..." && \
-    # 4. 重新构建/修复 bin（解决 rolldown/vite/esbuild/playwright not found）
+    # === 修复 feishu 插件依赖（关键新增）===
+    pnpm add @larksuiteoapi/node-sdk https-proxy-agent --prod && \
+    # 如果还有其他 feishu 依赖，也可以一起加（常见的有 @sinclair/typebox、zod）
+    pnpm add @sinclair/typebox zod --prod && \
+    # 执行 bundled plugins postinstall（确保插件被正确处理）
+    node scripts/postinstall-bundled-plugins.mjs || \
+      echo "Warning: postinstall-bundled-plugins.mjs had issues, continuing..." && \
+    # 修复 bin 问题（保留你之前的处理）
     pnpm rebuild --recursive || true && \
-    # 5. 手动创建常见 bin 软链接（兜底方案）
     for bin in rolldown vite esbuild playwright; do \
       if command -v $bin >/dev/null 2>&1; then \
         ln -sf "$(command -v $bin)" "/app/node_modules/.bin/$bin" || true; \
-      else \
-        echo "Warning: $bin not found in PATH, skipping symlink"; \
       fi; \
     done && \
     # 清理
