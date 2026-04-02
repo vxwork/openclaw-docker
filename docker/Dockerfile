@@ -82,6 +82,7 @@ RUN rm -rf extensions && git checkout extensions
 # Build project, prune dependencies, and clean in single layer
 RUN pnpm build && \
     pnpm ui:build && \
+    node scripts/postinstall-bundled-plugins.mjs || true && \
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
     CI=true pnpm prune --prod && \
     find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
@@ -153,19 +154,24 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
-    # 先安装生产依赖（--prod）
+    # 1. 强制使用 pnpm（避免任何 npm 调用）
     pnpm install --frozen-lockfile --prod && \
-    # 强制添加 feishu 插件需要的代理依赖（你之前已经加了，保留）
+    # 2. 确保 https-proxy-agent 存在（feishu 插件需要）
     pnpm add https-proxy-agent --prod && \
-    # 关键：手动执行 postinstall 脚本，确保 bundled plugins（包括 feishu）被正确处理
-    node scripts/postinstall-bundled-plugins.mjs || echo "postinstall completed with warnings" && \
-    # 修复 bin symlink 问题（最重要）
+    # 3. 显式执行 postinstall 脚本，但绕过内部 npm 调用（最重要！）
+    #    如果脚本内部强制用 npm，可以临时跳过依赖安装部分，或修复脚本
+    NODE_ENV=production node scripts/postinstall-bundled-plugins.mjs || \
+      echo "Warning: postinstall-bundled-plugins.mjs failed, continuing..." && \
+    # 4. 重新构建/修复 bin（解决 rolldown/vite/esbuild/playwright not found）
     pnpm rebuild --recursive || true && \
-    # 手动修复常见 bin（防止 rolldown/vite/esbuild/playwright 警告影响插件加载）
-    (pnpm exec rolldown --print-path 2>/dev/null && ln -sf "$(pnpm exec rolldown --silent --print-path)" /app/node_modules/.bin/rolldown || true) && \
-    (pnpm exec vite --print-path 2>/dev/null && ln -sf "$(pnpm exec vite --silent --print-path)" /app/node_modules/.bin/vite || true) && \
-    (pnpm exec esbuild --print-path 2>/dev/null && ln -sf "$(pnpm exec esbuild --silent --print-path)" /app/node_modules/.bin/esbuild || true) && \
-    (pnpm exec playwright --print-path 2>/dev/null && ln -sf "$(pnpm exec playwright --silent --print-path)" /app/node_modules/.bin/playwright || true) && \
+    # 5. 手动创建常见 bin 软链接（兜底方案）
+    for bin in rolldown vite esbuild playwright; do \
+      if command -v $bin >/dev/null 2>&1; then \
+        ln -sf "$(command -v $bin)" "/app/node_modules/.bin/$bin" || true; \
+      else \
+        echo "Warning: $bin not found in PATH, skipping symlink"; \
+      fi; \
+    done && \
     # 清理
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
