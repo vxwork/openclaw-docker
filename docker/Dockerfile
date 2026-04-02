@@ -154,6 +154,7 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
     pnpm install --frozen-lockfile --prod && \
+    pnpm add https-proxy-agent --prod && \
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
