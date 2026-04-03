@@ -87,44 +87,13 @@ RUN pnpm build && \
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
     CI=true pnpm prune --prod && \
     find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
-    find node_modules extensions -name "*.md" -delete 2>/dev/null || true && \
-    find node_modules extensions -name "*.ts" -delete 2>/dev/null || true && \
-    find node_modules extensions -name "*.tsx" -delete 2>/dev/null || true && \
-    find node_modules extensions -name "CHANGELOG*" -delete 2>/dev/null || true && \
-    find node_modules extensions -name "LICENSE*" -delete 2>/dev/null || true && \
-    find node_modules extensions -name "AUTHORS*" -delete 2>/dev/null || true && \
-    find node_modules extensions -name "README*" -delete 2>/dev/null || true && \
-    find node_modules -name "*.d.ts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.d.mts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.d.cts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.map" -delete 2>/dev/null || true && \
-    find node_modules -type d \( -name "__tests__" -o -name "test" -o -name "tests" -o -name "spec" \) \
-        -prune -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules \( -name "*.spec.js" -o -name "*.test.js" -o -name "*.spec.mjs" -o -name "*.test.mjs" \) \
-        -delete 2>/dev/null || true && \
-    find node_modules -name "*.node" -exec strip --strip-unneeded {} \; 2>/dev/null || true && \
+    find node_modules -name "*.md" -delete 2>/dev/null || true && \
+    find node_modules -name "*.ts" -delete 2>/dev/null || true && \
+    find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
 
-# ==================== Stage 3: Python venv builder ====================
-# Build Python venv on the same base as runtime to ensure binary compatibility.
-# Kept as a separate stage so pip/setuptools never enter the final image.
-FROM almalinux:10.1 AS python-builder
-
-RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
-        python3 \
-        python3-pip && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf/*
-
-RUN python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
-    /opt/venv/bin/pip install --no-cache-dir \
-        reportlab \
-        pillow && \
-    /opt/venv/bin/pip cache purge
-
-# ==================== Stage 4: Runtime ====================
+# ==================== Stage 3: Runtime ====================
 FROM almalinux:10.1 AS runtime
 
 # Set timezone early
@@ -135,13 +104,14 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ARG NODEJS_VERSION="24"
 
 # Install minimal system dependencies in single layer
-# python3-pip intentionally omitted — venv is built in python-builder stage
+# Use dnf with aggressive cleanup for minimal footprint
 RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         epel-release && \
     dnf install -y --setopt=install_weak_deps=False --nodocs \
         curl \
         ca-certificates \
         python3 \
+        python3-pip \
         procps-ng \
         hostname \
         openssl \
@@ -160,12 +130,20 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 
-# Copy pre-built Python venv from python-builder (pip/setuptools stay out of this image)
-COPY --from=python-builder /opt/venv /opt/venv
+# Install Python packages for skills (only essential ones)
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir \
+        reportlab \
+        pillow && \
+    /opt/venv/bin/pip cache purge
 
 WORKDIR /app
 
-# Copy runtime essentials from builder
+# Copy runtime essentials from builder (without node_modules)
+# Note: Docker automatically optimizes multiple COPY instructions from the same 
+# source stage into a single layer, so keeping them separate improves readability
+# without increasing image size.
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
@@ -178,7 +156,7 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
     # 1. 基础生产依赖安装
-    pnpm install --frozen-lockfile --prod && \
+    pnpm install --frozen-lockfile --prod && \    
     # 2. 强制添加所有常见 bundled plugins 的缺失依赖（一次性解决 feishu + amazon-bedrock + 其他）
     pnpm add \
       @larksuiteoapi/node-sdk \
@@ -188,36 +166,37 @@ RUN corepack enable pnpm && \
       @aws-sdk/credential-providers \
       @sinclair/typebox \
       zod \
-      --prod && \
-    # 3. 执行 postinstall（允许失败）
-    (node scripts/postinstall-bundled-plugins.mjs || \
-      echo "Warning: postinstall-bundled-plugins.mjs failed, continuing...") && \
-    # 4. 重建 native 模块
+      --prod && \    
+    # 3. 对 amazon-bedrock 插件目录单独安装（最可靠的兜底）
+    echo "=== Installing amazon-bedrock plugin dependencies manually ===" && \
+    cd /app/extensions/amazon-bedrock && \
+    pnpm install --prod --no-frozen-lockfile || \
+      echo "Warning: amazon-bedrock local install had issues, continuing..." && \
+    cd /app && \    
+    # 4. 对 feishu 也再做一次（防止之前没完全生效）
+    cd /app/extensions/feishu && \
+    pnpm install --prod --no-frozen-lockfile || true && \
+    cd /app && \    
+    # 5. 执行 postinstall（允许失败）
+    node scripts/postinstall-bundled-plugins.mjs || \
+      echo "Warning: postinstall-bundled-plugins.mjs failed (npm compatibility), continuing..." && \    
+    # 6. 修复 bin 问题
     pnpm rebuild --recursive || true && \
-    # 5. 清理
+    for bin in rolldown vite esbuild playwright; do \
+      if command -v $bin >/dev/null 2>&1; then \
+        ln -sf "$(command -v $bin)" "/app/node_modules/.bin/$bin" || true; \
+      fi; \
+    done && \    
+    # 7. 清理
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
     find node_modules -name "*.ts" -delete 2>/dev/null || true && \
     find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
-    find node_modules -name "CHANGELOG*" -delete 2>/dev/null || true && \
-    find node_modules -name "LICENSE*" -delete 2>/dev/null || true && \
-    find node_modules -name "AUTHORS*" -delete 2>/dev/null || true && \
-    find node_modules -name "README*" -delete 2>/dev/null || true && \
-    find node_modules -name "*.d.ts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.d.mts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.d.cts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.map" -delete 2>/dev/null || true && \
-    find node_modules -type d \( -name "__tests__" -o -name "test" -o -name "tests" -o -name "spec" \) \
-        -prune -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules \( -name "*.spec.js" -o -name "*.test.js" -o -name "*.spec.mjs" -o -name "*.test.mjs" \) \
-        -delete 2>/dev/null || true && \
-    find node_modules \( -name "*.flow" -o -name "*.coffee" -o -name "*.gyp" -o -name "*.gypi" \) \
-        -delete 2>/dev/null || true && \
-    find node_modules -name "*.node" -exec strip --strip-unneeded {} \; 2>/dev/null || true && \
     chmod -R 755 /app && \
     ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
 
+# Set proper permissions and create symlink (already done in RUN above)
 # Setup Python virtual environment path
 ENV PATH="/opt/venv/bin:/usr/local/bin:$PATH"
 
