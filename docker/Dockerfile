@@ -154,16 +154,23 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 # - postinstall-bundled-plugins.mjs is wrapped in its own subshell so that its optional
 #   failure does NOT silently mask failures in the pnpm install step above it.
 RUN corepack enable pnpm && \
-    # Install root package production dependencies only (no workspace context).
-    # Including extensions/* in the workspace would hoist ALL 93+ extension deps to
-    # node_modules, bloating the image by 1-2GB. Instead, only stageRuntimeDependencies
-    # extensions need runtime deps — those are handled by postinstall-bundled-plugins.mjs.
+    # Dynamically generate a pnpm workspace config scoped only to extensions that declare
+    # runtime dependencies in their compiled output (dist/extensions/*/package.json).
+    # This typically covers ~10-20 channel/platform extensions (slack, discord, feishu, etc.)
+    # rather than all 93+, keeping node_modules lean while ensuring every externalized import
+    # in dist/ is satisfied. python3 is used to avoid shell-quoting issues in Dockerfile RUN.
+    { echo 'packages:'; echo '  - .'; \
+      for dir in dist/extensions/*/; do \
+        ext=$(basename "$dir"); \
+        if [ -f "dist/extensions/$ext/package.json" ] && \
+           [ -f "extensions/$ext/package.json" ] && \
+           grep -qE '"(dependencies|optionalDependencies)"' \
+               "dist/extensions/$ext/package.json" 2>/dev/null; then \
+          echo "  - extensions/$ext"; \
+        fi; \
+      done; \
+    } > pnpm-workspace.yaml && \
     pnpm install --prod && \
-    # Shim npm → pnpm so postinstall-bundled-plugins.mjs installs extension deps via pnpm.
-    # Without this, the script uses bare npm which mixes flat installs with pnpm's virtual
-    # store, corrupting symlinks and causing ERR_MODULE_NOT_FOUND at startup.
-    printf '#!/bin/sh\nPKGS=""\nfor arg in "$@"; do\n  case "$arg" in\n    install|--omit=*|--no-save|--package-lock=*|--*) ;;\n    *) PKGS="$PKGS $arg" ;;\n  esac\ndone\n[ -z "$PKGS" ] && exit 0\nexec pnpm add --prod $PKGS\n' > /usr/local/bin/npm && \
-    chmod +x /usr/local/bin/npm && \
     (node scripts/postinstall-bundled-plugins.mjs || \
       echo "Warning: postinstall-bundled-plugins.mjs failed, continuing...") && \
     pnpm store prune && \
