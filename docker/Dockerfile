@@ -159,12 +159,28 @@ RUN corepack enable pnpm && \
       echo "Warning: postinstall-bundled-plugins.mjs failed, continuing...") && \
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
+    # --- Documentation and metadata (safe to delete) ---
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
     find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
     find node_modules -name "CHANGELOG*" -delete 2>/dev/null || true && \
     find node_modules -name "LICENSE*" -delete 2>/dev/null || true && \
     find node_modules -name "AUTHORS*" -delete 2>/dev/null || true && \
     find node_modules -name "README*" -delete 2>/dev/null || true && \
+    # --- TypeScript declarations: never used by Node.js at runtime (~50-150MB) ---
+    find node_modules -name "*.d.ts" -delete 2>/dev/null || true && \
+    find node_modules -name "*.d.mts" -delete 2>/dev/null || true && \
+    find node_modules -name "*.d.cts" -delete 2>/dev/null || true && \
+    # --- Source maps: only useful for debugging, not runtime (~200-400MB) ---
+    find node_modules -name "*.map" -delete 2>/dev/null || true && \
+    # --- Test files and directories (~50-100MB) ---
+    find node_modules -type d \( -name "__tests__" -o -name "test" -o -name "tests" -o -name "spec" \) \
+        -prune -exec rm -rf {} + 2>/dev/null || true && \
+    find node_modules \( -name "*.spec.js" -o -name "*.test.js" -o -name "*.spec.mjs" -o -name "*.test.mjs" \) \
+        -delete 2>/dev/null || true && \
+    # --- Other non-JS source files (safe to delete) ---
+    find node_modules \( -name "*.flow" -o -name "*.coffee" -o -name "*.gyp" -o -name "*.gypi" \) \
+        -delete 2>/dev/null || true && \
+    # --- Strip debug symbols from native addons ---
     find node_modules -name "*.node" -exec strip --strip-unneeded {} \; 2>/dev/null || true && \
     chmod -R 755 /app && \
     ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
