@@ -144,16 +144,22 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
 # Install production dependencies and run postinstall for bundled plugin deps.
-# postinstall-bundled-plugins.mjs runs properly here (no .git/src = not a source checkout),
-# scanning dist/extensions for any remaining missing runtime deps.
+# Notes:
+# - pnpm-workspace.yaml is not present here (not copied), so pnpm treats this as a
+#   single-package install and resolves root deps only. Extension workspace deps
+#   (@buape/carbon etc.) are handled by postinstall-bundled-plugins.mjs below.
+# - --frozen-lockfile is intentionally omitted: the lockfile was built in a full workspace
+#   context (with ui/ and packages/*) that doesn't exist in this runtime image, so frozen
+#   mode would fail. pnpm still uses the lockfile for version pinning.
+# - postinstall-bundled-plugins.mjs is wrapped in its own subshell so that its optional
+#   failure does NOT silently mask failures in the pnpm install step above it.
 RUN corepack enable pnpm && \
-    pnpm install --frozen-lockfile --prod && \
-    node scripts/postinstall-bundled-plugins.mjs || \
-      echo "Warning: postinstall-bundled-plugins.mjs failed, continuing..." && \
+    pnpm install --prod --omit=optional && \
+    (node scripts/postinstall-bundled-plugins.mjs || \
+      echo "Warning: postinstall-bundled-plugins.mjs failed, continuing...") && \
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
-    find node_modules -name "*.ts" -delete 2>/dev/null || true && \
     find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
     find node_modules -name "CHANGELOG*" -delete 2>/dev/null || true && \
     find node_modules -name "LICENSE*" -delete 2>/dev/null || true && \
