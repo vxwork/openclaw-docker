@@ -144,12 +144,10 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
 # Install production dependencies and run postinstall for bundled plugin deps.
-# --omit=optional skips platform-specific optional packages (e.g. fsevents, arch-specific
-# binaries) that aren't needed on Linux x86_64. Test against your extension set if unsure.
 # postinstall-bundled-plugins.mjs runs properly here (no .git/src = not a source checkout),
 # scanning dist/extensions for any remaining missing runtime deps.
 RUN corepack enable pnpm && \
-    pnpm install --frozen-lockfile --prod --omit=optional && \
+    pnpm install --frozen-lockfile --prod && \
     node scripts/postinstall-bundled-plugins.mjs || \
       echo "Warning: postinstall-bundled-plugins.mjs failed, continuing..." && \
     pnpm store prune && \
