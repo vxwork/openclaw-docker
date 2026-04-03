@@ -55,8 +55,9 @@ RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/sto
       @sinclair/typebox \
       zod
 
-# Build using Docker-specific target (skips canvas/native bundling, faster than full build)
-RUN pnpm build:docker && pnpm ui:build
+# canvas:a2ui:bundle must run before build:docker — build:docker skips bundling but still
+# copies the generated assets via canvas-a2ui-copy.ts, so the assets must exist first.
+RUN pnpm canvas:a2ui:bundle && pnpm build:docker && pnpm ui:build
 
 # Prune to production deps, strip native modules, and clean up in single layer
 RUN pnpm prune --prod && \
