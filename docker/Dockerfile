@@ -154,7 +154,7 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 # - postinstall-bundled-plugins.mjs is wrapped in its own subshell so that its optional
 #   failure does NOT silently mask failures in the pnpm install step above it.
 RUN corepack enable pnpm && \
-    pnpm install --prod --omit=optional && \
+    pnpm install --prod && \
     (node scripts/postinstall-bundled-plugins.mjs || \
       echo "Warning: postinstall-bundled-plugins.mjs failed, continuing...") && \
     pnpm store prune && \
