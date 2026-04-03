@@ -1,38 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-# ==================== Stage 1: Extension Dependencies ====================
-# Extract only package.json files from extensions for better cache utilization
-FROM node:24-bookworm-slim AS ext-deps
-
-ARG OPENCLAW_REPO="https://github.com/openclaw/openclaw.git"
-ARG OPENCLAW_BRANCH="main"
-
-WORKDIR /tmp/openclaw
-
-# Install git and clone repository (shallow clone for speed)
-# Must install ca-certificates first for HTTPS to work
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        git && \
-    rm -rf /var/lib/apt/lists/* && \
-    git clone --depth=1 --branch=${OPENCLAW_BRANCH} ${OPENCLAW_REPO} .
-
-WORKDIR /tmp/extensions
-
-# Copy extensions from cloned repository
-RUN cp -r /tmp/openclaw/extensions/. .
-
-RUN mkdir -p /out && \
-    for dir in */; do \
-      if [ -f "$dir/package.json" ]; then \
-        ext_name=$(basename "$dir"); \
-        mkdir -p "/out/$ext_name" && \
-        cp "$dir/package.json" "/out/$ext_name/package.json"; \
-      fi; \
-    done
-
-# ==================== Stage 2: Builder ====================
+# ==================== Stage 1: Builder ====================
 FROM node:24-bookworm-slim AS builder
 
 ARG OPENCLAW_REPO="https://github.com/openclaw/openclaw.git"
@@ -69,29 +37,58 @@ WORKDIR /app
 # Clone OpenClaw repository (shallow clone)
 RUN git clone --depth=1 --branch=${OPENCLAW_BRANCH} ${OPENCLAW_REPO} .
 
-# Copy extension package.json files from ext-deps stage for dependency caching
-COPY --from=ext-deps /out/ ./extensions/
-
-# Install dependencies with cache optimization
+# Install all dependencies with pnpm store cache
 RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
     NODE_OPTIONS="--max-old-space-size=2048" pnpm install --frozen-lockfile
 
-# Copy full source code again (this will use cache if extensions didn't change)
-RUN rm -rf extensions && git checkout extensions
+# Pre-add runtime deps required by bundled extensions (not declared in main lockfile).
+# Done here so the runtime stage can use --frozen-lockfile cleanly without extra pnpm add steps.
+# Note: postinstall-bundled-plugins.mjs is intentionally NOT run here — it auto-skips source
+# checkouts (detects .git + src + extensions), so calling it in builder is a no-op.
+RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm add --workspace-root \
+      @larksuiteoapi/node-sdk \
+      https-proxy-agent \
+      @aws-sdk/client-bedrock \
+      @aws-sdk/client-sts \
+      @aws-sdk/credential-providers \
+      @sinclair/typebox \
+      zod
 
-# Build project, prune dependencies, and clean in single layer
-RUN pnpm build && \
-    pnpm ui:build && \
-    pnpm add @larksuiteoapi/node-sdk https-proxy-agent --workspace-root && \
-    node scripts/postinstall-bundled-plugins.mjs || true && \
-    touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
-    CI=true pnpm prune --prod && \
+# Build using Docker-specific target (skips canvas/native bundling, faster than full build)
+RUN pnpm build:docker && pnpm ui:build
+
+# Prune to production deps, strip native modules, and clean up in single layer
+RUN pnpm prune --prod && \
     find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
-    find node_modules -name "*.md" -delete 2>/dev/null || true && \
-    find node_modules -name "*.ts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
+    find node_modules extensions -name "*.md" -delete 2>/dev/null || true && \
+    find node_modules extensions -name "*.ts" -delete 2>/dev/null || true && \
+    find node_modules extensions -name "*.tsx" -delete 2>/dev/null || true && \
+    find node_modules extensions -name "CHANGELOG*" -delete 2>/dev/null || true && \
+    find node_modules extensions -name "LICENSE*" -delete 2>/dev/null || true && \
+    find node_modules extensions -name "AUTHORS*" -delete 2>/dev/null || true && \
+    find node_modules extensions -name "README*" -delete 2>/dev/null || true && \
+    find node_modules -name "*.node" -exec strip --strip-unneeded {} \; 2>/dev/null || true && \
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
+
+# ==================== Stage 2: Python venv builder ====================
+# Build Python venv on the same base as runtime to ensure binary compatibility.
+# Kept as a separate stage so that pip/setuptools (~20MB) never enter the final image.
+FROM almalinux:10.1 AS python-builder
+
+RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
+        python3 \
+        python3-pip && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf/*
+
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir \
+        reportlab \
+        pillow && \
+    /opt/venv/bin/pip cache purge
 
 # ==================== Stage 3: Runtime ====================
 FROM almalinux:10.1 AS runtime
@@ -103,15 +100,15 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # Allow overriding Node.js version at build time (default to latest LTS)
 ARG NODEJS_VERSION="24"
 
-# Install minimal system dependencies in single layer
-# Use dnf with aggressive cleanup for minimal footprint
+# Install minimal system dependencies.
+# python3-pip is intentionally omitted — the venv is built in the python-builder stage
+# and copied in, so pip is never needed here.
 RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         epel-release && \
     dnf install -y --setopt=install_weak_deps=False --nodocs \
         curl \
         ca-certificates \
         python3 \
-        python3-pip \
         procps-ng \
         hostname \
         openssl \
@@ -130,20 +127,12 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 
-# Install Python packages for skills (only essential ones)
-RUN python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
-    /opt/venv/bin/pip install --no-cache-dir \
-        reportlab \
-        pillow && \
-    /opt/venv/bin/pip cache purge
+# Copy pre-built Python venv from python-builder (pip/setuptools stay out of this image)
+COPY --from=python-builder /opt/venv /opt/venv
 
 WORKDIR /app
 
-# Copy runtime essentials from builder (without node_modules)
-# Note: Docker automatically optimizes multiple COPY instructions from the same 
-# source stage into a single layer, so keeping them separate improves readability
-# without increasing image size.
+# Copy runtime essentials from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
@@ -153,50 +142,28 @@ COPY --from=builder /app/scripts ./scripts
 # Copy docs/reference/templates (required for workspace setup)
 COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 
-# Install production dependencies, clean up, set permissions, and create symlink in single layer
+# Install production dependencies and run postinstall for bundled plugin deps.
+# --omit=optional skips platform-specific optional packages (e.g. fsevents, arch-specific
+# binaries) that aren't needed on Linux x86_64. Test against your extension set if unsure.
+# postinstall-bundled-plugins.mjs runs properly here (no .git/src = not a source checkout),
+# scanning dist/extensions for any remaining missing runtime deps.
 RUN corepack enable pnpm && \
-    # 1. 基础生产依赖安装
-    pnpm install --frozen-lockfile --prod && \    
-    # 2. 强制添加所有常见 bundled plugins 的缺失依赖（一次性解决 feishu + amazon-bedrock + 其他）
-    pnpm add \
-      @larksuiteoapi/node-sdk \
-      https-proxy-agent \
-      @aws-sdk/client-bedrock \
-      @aws-sdk/client-sts \
-      @aws-sdk/credential-providers \
-      @sinclair/typebox \
-      zod \
-      --prod && \    
-    # 3. 对 amazon-bedrock 插件目录单独安装（最可靠的兜底）
-    echo "=== Installing amazon-bedrock plugin dependencies manually ===" && \
-    cd /app/extensions/amazon-bedrock && \
-    pnpm install --prod --no-frozen-lockfile || \
-      echo "Warning: amazon-bedrock local install had issues, continuing..." && \
-    cd /app && \    
-    # 4. 对 feishu 也再做一次（防止之前没完全生效）
-    cd /app/extensions/feishu && \
-    pnpm install --prod --no-frozen-lockfile || true && \
-    cd /app && \    
-    # 5. 执行 postinstall（允许失败）
+    pnpm install --frozen-lockfile --prod --omit=optional && \
     node scripts/postinstall-bundled-plugins.mjs || \
-      echo "Warning: postinstall-bundled-plugins.mjs failed (npm compatibility), continuing..." && \    
-    # 6. 修复 bin 问题
-    pnpm rebuild --recursive || true && \
-    for bin in rolldown vite esbuild playwright; do \
-      if command -v $bin >/dev/null 2>&1; then \
-        ln -sf "$(command -v $bin)" "/app/node_modules/.bin/$bin" || true; \
-      fi; \
-    done && \    
-    # 7. 清理
+      echo "Warning: postinstall-bundled-plugins.mjs failed, continuing..." && \
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
     find node_modules -name "*.md" -delete 2>/dev/null || true && \
     find node_modules -name "*.ts" -delete 2>/dev/null || true && \
     find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
+    find node_modules -name "CHANGELOG*" -delete 2>/dev/null || true && \
+    find node_modules -name "LICENSE*" -delete 2>/dev/null || true && \
+    find node_modules -name "AUTHORS*" -delete 2>/dev/null || true && \
+    find node_modules -name "README*" -delete 2>/dev/null || true && \
+    find node_modules -name "*.node" -exec strip --strip-unneeded {} \; 2>/dev/null || true && \
     chmod -R 755 /app && \
     ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
 
-# Set proper permissions and create symlink (already done in RUN above)
 # Setup Python virtual environment path
 ENV PATH="/opt/venv/bin:/usr/local/bin:$PATH"
 
