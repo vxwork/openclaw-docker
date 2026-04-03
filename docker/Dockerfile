@@ -154,7 +154,16 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 # - postinstall-bundled-plugins.mjs is wrapped in its own subshell so that its optional
 #   failure does NOT silently mask failures in the pnpm install step above it.
 RUN corepack enable pnpm && \
+    # Install root package production dependencies only (no workspace context).
+    # Including extensions/* in the workspace would hoist ALL 93+ extension deps to
+    # node_modules, bloating the image by 1-2GB. Instead, only stageRuntimeDependencies
+    # extensions need runtime deps — those are handled by postinstall-bundled-plugins.mjs.
     pnpm install --prod && \
+    # Shim npm → pnpm so postinstall-bundled-plugins.mjs installs extension deps via pnpm.
+    # Without this, the script uses bare npm which mixes flat installs with pnpm's virtual
+    # store, corrupting symlinks and causing ERR_MODULE_NOT_FOUND at startup.
+    printf '#!/bin/sh\nPKGS=""\nfor arg in "$@"; do\n  case "$arg" in\n    install|--omit=*|--no-save|--package-lock=*|--*) ;;\n    *) PKGS="$PKGS $arg" ;;\n  esac\ndone\n[ -z "$PKGS" ] && exit 0\nexec pnpm add --prod $PKGS\n' > /usr/local/bin/npm && \
+    chmod +x /usr/local/bin/npm && \
     (node scripts/postinstall-bundled-plugins.mjs || \
       echo "Warning: postinstall-bundled-plugins.mjs failed, continuing...") && \
     pnpm store prune && \
