@@ -113,7 +113,8 @@ RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         hostname \
         openssl \
         jq \
-        glibc-langpack-en && \
+        glibc-langpack-en \
+        glibc-langpack-zh && \
     dnf remove -y epel-release && \
     dnf clean all && \
     rm -rf /var/cache/dnf/* /var/log/dnf* /var/log/yum.* /tmp/* /var/tmp/*
