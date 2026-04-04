@@ -197,7 +197,7 @@ RUN corepack enable pnpm && \
     find node_modules -type d \( \
       -name "test" -o -name "tests" -o -name "__tests__" \
       -o -name "example" -o -name "examples" \
-      -o -name "docs" -o -name "doc" \
+      -o -name "docs" \
       -o -name ".github" -o -name ".vscode" \
     \) -exec rm -rf {} + 2>/dev/null || true && \
     # 删除非运行时文件
