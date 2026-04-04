@@ -170,8 +170,6 @@ RUN corepack enable pnpm && \
       @aws-sdk/credential-providers \
       @sinclair/typebox \
       @slack/web-api \
-      @buape/carbon \
-      grammy \
       zod \
       --prod && \
     # 3. 对 amazon-bedrock 插件目录单独安装（最可靠的兜底）
