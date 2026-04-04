@@ -87,11 +87,8 @@ RUN pnpm build && \
     touch -r dist/index.js dist/.fresh-marker 2>/dev/null || true && \
     CI=true pnpm prune --prod && \
     find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete 2>/dev/null || true && \
-    find node_modules -name "*.md" -delete 2>/dev/null || true && \
-    find node_modules -name "*.ts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
     pnpm store prune && \
-    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm
+    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm /root/.bun
 
 # ==================== Stage 3: Runtime ====================
 FROM almalinux:10.1 AS runtime
@@ -116,8 +113,9 @@ RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         hostname \
         openssl \
         glibc-langpack-en && \
+    dnf remove -y epel-release && \
     dnf clean all && \
-    rm -rf /var/cache/dnf/* /var/log/dnf* /var/log/yum.*
+    rm -rf /var/cache/dnf/* /var/log/dnf* /var/log/yum.* /tmp/* /var/tmp/*
 
 # Install Node.js from Nodesource (version configurable via ARG)
 RUN curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_VERSION}.x | bash - && \
@@ -136,7 +134,11 @@ RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir \
         reportlab \
         pillow && \
-    /opt/venv/bin/pip cache purge
+    /opt/venv/bin/pip cache purge && \
+    find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type f -name "*.pyc" -delete 2>/dev/null || true && \
+    find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
 
 WORKDIR /app
 
@@ -156,7 +158,7 @@ COPY --from=builder /app/docs/reference/templates ./docs/reference/templates
 # Install production dependencies, clean up, set permissions, and create symlink in single layer
 RUN corepack enable pnpm && \
     # 1. 基础生产依赖安装
-    pnpm install --frozen-lockfile --prod && \    
+    pnpm install --frozen-lockfile --prod && \
     # 2. 强制添加所有常见 bundled plugins 的缺失依赖（一次性解决 feishu + amazon-bedrock + 其他）
     pnpm add \
       @larksuiteoapi/node-sdk \
@@ -167,33 +169,48 @@ RUN corepack enable pnpm && \
       @sinclair/typebox \
       @slack/web-api \
       zod \
-      --prod && \    
+      --prod && \
     # 3. 对 amazon-bedrock 插件目录单独安装（最可靠的兜底）
     echo "=== Installing amazon-bedrock plugin dependencies manually ===" && \
     cd /app/extensions/amazon-bedrock && \
     pnpm install --prod --no-frozen-lockfile || \
       echo "Warning: amazon-bedrock local install had issues, continuing..." && \
-    cd /app && \    
+    cd /app && \
     # 4. 对 feishu 也再做一次（防止之前没完全生效）
     cd /app/extensions/feishu && \
     pnpm install --prod --no-frozen-lockfile || true && \
-    cd /app && \    
+    cd /app && \
     # 5. 执行 postinstall（允许失败）
     node scripts/postinstall-bundled-plugins.mjs || \
-      echo "Warning: postinstall-bundled-plugins.mjs failed (npm compatibility), continuing..." && \    
-    # 6. 修复 bin 问题
-    pnpm rebuild --recursive || true && \
-    for bin in rolldown vite esbuild playwright; do \
-      if command -v $bin >/dev/null 2>&1; then \
-        ln -sf "$(command -v $bin)" "/app/node_modules/.bin/$bin" || true; \
-      fi; \
-    done && \    
-    # 7. 清理
+      echo "Warning: postinstall-bundled-plugins.mjs failed (npm compatibility), continuing..." && \
+    # 6. 清理 node_modules（激进清理非运行时文件）
     pnpm store prune && \
-    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm && \
-    find node_modules -name "*.md" -delete 2>/dev/null || true && \
-    find node_modules -name "*.ts" -delete 2>/dev/null || true && \
-    find node_modules -name "*.tsx" -delete 2>/dev/null || true && \
+    rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm /tmp/* && \
+    # 删除 TypeScript 类型声明和 source maps
+    find node_modules -type f \( \
+      -name "*.d.ts" -o -name "*.d.mts" -o -name "*.d.cts" \
+      -o -name "*.map" -o -name "*.js.map" \
+      -o -name "*.ts" -o -name "*.tsx" \
+      -o -name "*.md" \
+    \) -delete 2>/dev/null || true && \
+    # 删除文档、示例、测试、编辑器配置等非运行时目录
+    find node_modules -type d \( \
+      -name "test" -o -name "tests" -o -name "__tests__" \
+      -o -name "example" -o -name "examples" \
+      -o -name "docs" -o -name "doc" \
+      -o -name ".github" -o -name ".vscode" \
+    \) -exec rm -rf {} + 2>/dev/null || true && \
+    # 删除非运行时文件
+    find node_modules -type f \( \
+      -name "LICENSE*" -o -name "LICENCE*" \
+      -o -name "CHANGELOG*" -o -name "HISTORY*" -o -name "CHANGES*" \
+      -o -name "AUTHORS*" -o -name "CONTRIBUTORS*" \
+      -o -name ".npmignore" -o -name ".eslintrc*" -o -name ".prettierrc*" \
+      -o -name ".editorconfig" -o -name ".jshintrc" \
+      -o -name "tsconfig*.json" -o -name "jest.config*" \
+      -o -name "Makefile" -o -name "Gruntfile*" -o -name "Gulpfile*" \
+      -o -name "*.tsbuildinfo" \
+    \) -delete 2>/dev/null || true && \
     chmod -R 755 /app && \
     ln -sf /app/openclaw.mjs /usr/local/bin/openclaw
 
