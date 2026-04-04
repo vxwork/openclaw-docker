@@ -194,8 +194,7 @@ RUN corepack enable pnpm && \
       node_modules/.pnpm/@node-llama-cpp+linux-x64@* \
       node_modules/.pnpm/node-llama-cpp@* \
       node_modules/.pnpm/koffi@* \
-      node_modules/.pnpm/typescript@* \
-      node_modules/.pnpm/playwright-core@* && \
+      node_modules/.pnpm/typescript@* && \
     # 清理 pnpm store 和缓存
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm /tmp/* && \
