@@ -168,6 +168,8 @@ RUN corepack enable pnpm && \
       @aws-sdk/credential-providers \
       @sinclair/typebox \
       @slack/web-api \
+      @buape/carbon \
+      grammy \
       zod \
       --prod && \
     # 3. 对 amazon-bedrock 插件目录单独安装（最可靠的兜底）
@@ -183,7 +185,17 @@ RUN corepack enable pnpm && \
     # 5. 执行 postinstall（允许失败）
     node scripts/postinstall-bundled-plugins.mjs || \
       echo "Warning: postinstall-bundled-plugins.mjs failed (npm compatibility), continuing..." && \
-    # 6. 清理 node_modules（激进清理非运行时文件）
+    # 6. 删除不需要的大型包（llama-cpp 本地推理 + typescript 编译器）
+    rm -rf \
+      node_modules/.pnpm/@node-llama-cpp+linux-x64-cuda-ext@* \
+      node_modules/.pnpm/@node-llama-cpp+linux-x64-cuda@* \
+      node_modules/.pnpm/@node-llama-cpp+linux-x64-vulkan@* \
+      node_modules/.pnpm/@node-llama-cpp+linux-x64@* \
+      node_modules/.pnpm/node-llama-cpp@* \
+      node_modules/.pnpm/koffi@* \
+      node_modules/.pnpm/typescript@* \
+      node_modules/.pnpm/playwright-core@* && \
+    # 清理 pnpm store 和缓存
     pnpm store prune && \
     rm -rf /root/.pnpm-store /root/.cache/pnpm /root/.npm /tmp/* && \
     # 删除 TypeScript 类型声明和 source maps
