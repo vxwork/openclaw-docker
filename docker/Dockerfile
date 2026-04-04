@@ -112,6 +112,7 @@ RUN dnf install -y --setopt=install_weak_deps=False --nodocs \
         procps-ng \
         hostname \
         openssl \
+        jq \
         glibc-langpack-en && \
     dnf remove -y epel-release && \
     dnf clean all && \
