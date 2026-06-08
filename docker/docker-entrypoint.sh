@@ -8,11 +8,11 @@ fi
 # 确保 matplotlib 配置存在
 if [ ! -f /root/.config/matplotlib/matplotlibrc ]; then
     mkdir -p /root/.config/matplotlib
-    cat <<'EOF' >/root/.config/matplotlib/matplotlibrc
-font.family: sans-serif
-font.sans-serif: WenQuanYi Zen Hei, Noto Sans CJK SC, DejaVu Sans, sans-serif
-axes.unicode_minus: False
-EOF
+    {
+        printf '%s\n' "font.family: sans-serif"
+        printf '%s\n' "font.sans-serif: WenQuanYi Zen Hei, Noto Sans CJK SC, DejaVu Sans, sans-serif"
+        printf '%s\n' "axes.unicode_minus: False"
+    } > /root/.config/matplotlib/matplotlibrc
     echo "✅ matplotlibrc 已生成（优先中文字体）"
 fi
 
@@ -43,12 +43,12 @@ else
         fi
 
         # 写入 device.json（OpenClaw pairing 机制会用这个）
-        cat > "$DEVICE_JSON" <<EOF
-{
-  "token": "$GATEWAY_TOKEN",
-  "createdAt": "$(date -Iseconds)"
-}
-EOF
+        {
+            printf '%s\n' "{"
+            printf '  "token": "%s",\n' "$GATEWAY_TOKEN"
+            printf '  "createdAt": "%s"\n' "$(date -Iseconds)"
+            printf '%s\n' "}"
+        } > "$DEVICE_JSON"
         echo "✅ 新生成的 gateway token：$GATEWAY_TOKEN （保存在 $DEVICE_JSON）"
     else
         # 已存在 pairing/device.json → 从中读取 token（避免重复生成）
