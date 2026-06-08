@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+if [ "$#" -gt 0 ] && [ "$1" != "gateway" ]; then
+    exec "$@"
+fi
+
 # 确保 matplotlib 配置存在
 if [ ! -f /root/.config/matplotlib/matplotlibrc ]; then
     mkdir -p /root/.config/matplotlib

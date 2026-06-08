@@ -19,13 +19,13 @@ The workflow is manually triggered (`workflow_dispatch`) and uses the `docker/Do
 ## Image info
 
 - Registry: `ghcr.io`
-- Image name: `vxwork/openclaw-docker/online-base`
+- Image name: `vxwork/openclaw-docker/openclaw`
 - Tag example: `linux_latest`
 
 Pull example:
 
 ```bash
-docker pull ghcr.io/vxwork/openclaw-docker/online-base:linux_latest
+docker pull ghcr.io/vxwork/openclaw-docker/openclaw:linux_latest
 ```
 
 ## Run locally
@@ -35,7 +35,7 @@ Run with `docker run` (example):
 ```bash
 docker run -d --name openclaw -p 18789:18789 \
   -v openclaw-config:/app/config -v openclaw-data:/app/data \
-  ghcr.io/vxwork/openclaw-docker/online-base:linux_latest
+  ghcr.io/vxwork/openclaw-docker/openclaw:linux_latest
 ```
 
 Or use `docker-compose` (recommended when using this repository's compose file).
@@ -83,7 +83,8 @@ persists across restarts.
 
 ## Notes on Dockerfile
 
-- The `docker/Dockerfile` in this repository is based on `almalinux:10.1-minimal` and installs Node.js via NodeSource. It then installs `pnpm`, clones the `openclaw` repository, installs dependencies and builds the project.
+- The `docker/Dockerfile` uses a multi-stage build based on upstream OpenClaw's Docker build flow. It builds OpenClaw in Node/Bun stages, prunes the runtime assets, and keeps the final runtime image on `almalinux:10.2-minimal`.
+- The final image exposes `openclaw` through `/usr/local/bin/openclaw`; it does not use `pnpm link --global`, avoiding pnpm global bin directory issues during image builds.
 - The image exposes port `18789` and defines `VOLUME` entries for persistent `config` and `data`.
 
 ## Migration from `qverisbot-docker`
